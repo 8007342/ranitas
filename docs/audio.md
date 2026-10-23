@@ -19,12 +19,16 @@ Call `update(progress, richness, weather, sleeping)` as game state changes.
 Progress and richness accept normalized numbers; invalid numbers become zero.
 Progress is reserved for future scene evolution; richness controls overall gain
 and frog density. Weather strings containing rain/storm/thunder (or
-lluvia/tormenta) enable rain; storm/thunder/tormenta also enable thunder.
+lluvia/tormenta) enable full rain; drizzle uses 35% rain gain and a gentler
+wind increase. Storm/thunder/tormenta also enable thunder.
 Sleeping softens overall gain and adds occasional owl calls.
 
 Browser capture-phase pointerdown and Space/Enter keydown listeners synchronously
 create/resume a single context with zero master gain, before Flutter handles the
-event. Keyboard repeats, composition, modified shortcuts (Alt/Ctrl/Meta), other
+event. Matching trusted pointerup/keyup also synchronously retries resume,
+even while the press attempt is pending, for mobile release-time activation.
+A canceled pointer never completes the release gate or starts audio. Older
+resume results cannot override the latest release attempt. Keyboard repeats, composition, modified shortcuts (Alt/Ctrl/Meta), other
 keys, and synthetic unlock events are ignored. The listeners do not prevent
 browser defaults or stop propagation to Flutter.
 
@@ -35,7 +39,8 @@ a pointerdown/keydown-only update intentionally stays silent. An unrelated key
 or pointer release does not complete a keyboard unlock. No automatic unlock is
 attempted. Browser autoplay policy may still block playback. A rejected resume
 mutes and suspends the existing context and resets the unlock/release state;
-the next real pointerdown or Space/Enter keydown retries synchronously, without
+the matching trusted release or next real pointerdown/Space/Enter keydown
+retries synchronously, without
 creating another context. Scene updates are retained even before unlocking.
 Updates after release while resume is pending are applied when it succeeds;
 pre-gesture updates alone still cannot start playback. After rejection, a new

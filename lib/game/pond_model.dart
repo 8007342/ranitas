@@ -57,6 +57,11 @@ class PondModel {
 
   /// Renderer palette interpolation: dawn dark blue -> golden sunrise,
   /// dusk warm daylight -> blue night. Continues to hold its endpoint asleep.
+  /// A rare smooth underwater disturbance; the pads visibly wobble first.
+  double get leafNudge => started && !sleeping && !_settling && progress > .45
+      ? pow(max(0.0, sin(time * .071 + sceneSeed % 37)), 40).toDouble()
+      : 0.0;
+
   double get daylight => cycle == 'dawn' ? progress : 1 - progress;
   late final List<FrogState> frogs;
   final List<BugState> bugs = [];
@@ -280,7 +285,7 @@ class PondModel {
       final chance = .045 + .14 * _tapAgitation;
       if (!_settling &&
           !frog._returning &&
-          wind.abs() > .35 &&
+          (wind.abs() > .35 || _tapAgitation > .65 || leafNudge > .8) &&
           random.nextDouble() < chance) {
         frog.swimming = true;
         frog.bellyFlop = 1;

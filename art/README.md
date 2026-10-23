@@ -29,3 +29,8 @@ watermarks. Frogs and wildlife are independently animated procedural layers.
 
 Foreground vegetation, frogs, insects, reflections, rain, stars, koi, and
 sleeping marks are authored in Dart and composed separately at runtime.
+- `foreground-marsh`: genuine transparent foreground overlay; cattails, mossy
+  stones, ferns, cream/mauve flowers and two pink lotus blooms around lower
+  corners with an open center. Upper canvas empty alpha; no scene backdrop.
+  Common pixel-art direction above; generated with built-in image generation.
+  Composed separately, revealed gradually, and shifted gently for parallax.

@@ -48,7 +48,7 @@ Pond-wide pointer input and Space/Enter SHALL control frog 0; frog 1 SHALL use J
 
 ### Requirement: Consistent arcs and harmless recovery
 
-Tap, low and high SHALL use durations 0.68, 0.95 and 1.30 seconds and sine-arc heights 0.13, 0.25 and 0.39 logical pond heights. Companion arcs SHALL add 0.018 height for silhouette separation. Flights and swims SHALL be serialized. Wind mishaps SHALL recover without score loss or a failure state. Adaptive timing and JEV SHALL NOT alter user thresholds or arc constants.
+Tap, low and high SHALL use durations 0.68, 0.95 and 1.30 seconds and sine-arc heights 0.13, 0.25 and 0.39 logical pond heights. Companion arcs SHALL add 0.018 height for silhouette separation. Flights and swims SHALL be serialized. Wind, chaotic-tapping, and occasional underwater-pad disturbances SHALL recover without score loss or a failure state. Adaptive timing and JEV SHALL NOT alter user thresholds or arc constants.
 
 #### Scenario: Crossing and a wind mishap
 
@@ -120,7 +120,7 @@ JEV SHALL retain analytical projection at 4 Hz, augmented by the compiled 147-pa
 - **WHEN** the companion is eligible to act
 - **THEN** JEV evaluates ten samples for each of the three arcs against projected live-insect velocity
 - **AND** includes the implemented low-arc preference of 0.025 and wind penalty `abs(wind)*height*0.08`
-- **AND** the nearest-live-insect prior suggestion receives only the current 0.008 additive score bonus (approximately 0.01), which can break near-ties
+- **AND** the nearest-live-insect prior suggestion receives only the current 0.008 additive score bonus, which can break near-ties
 - **AND** landing sets a seeded cooldown of 1.1–2.4 s without remote inference.
 
 #### Scenario: Synthetic evidence remains scoped
@@ -131,7 +131,7 @@ JEV SHALL retain analytical projection at 4 Hz, augmented by the compiled 147-pa
 
 ### Requirement: Gradual bounded insect emergence
 
-Insects SHALL emerge gradually after activation with zero initial opacity, rising at 1/s. The latest model SHALL start with zero insects, replacing the earlier seven-bug constructor. Population growth SHALL follow richness and weather shelter, up to a target of 18 in clear/mist weather. Sleep SHALL NOT impose the superseded one-insect cap. Incompatible species SHALL fade at 0.3 opacity/s.
+Insects SHALL emerge gradually after activation with zero initial opacity, rising at 1/s. The model SHALL start with zero insects. Population growth SHALL follow richness and weather shelter, up to a target of 18 in clear/mist weather. Ambient insects SHALL continue after sleep within the population budget. Incompatible species SHALL fade at 0.3 opacity/s.
 
 #### Scenario: Current spawn budget
 
@@ -151,7 +151,7 @@ Insects SHALL use correlated angular drift, smoothly relaxed velocities and soft
 - **WHEN** the pure model advances through different update partitions
 - **THEN** its fixed 1/60 s steps reproduce trajectories within numerical tolerance
 - **AND** velocity relaxes with factor `1-exp(-3*dt)` and position remains within x=0.04–0.96 and y=0.12–0.65
-- **AND** edge safety reflection remains permitted; no invented 60-degree/s turn cap is required.
+- **AND** edge safety reflection remains permitted.
 
 #### Scenario: Dragonflies and delicate insects fit the scene
 

@@ -69,9 +69,25 @@
     unlockPending = false;
     started = false;
     gestureEnded = false;
-    unlockPointer = null;
-    unlockKey = null;
+    // Retain the matching input so its release can retry after a press rejection.
     stop();
+  }
+
+  // Each gesture-stack attempt supersedes older pending resume promises.
+  function resumeFromGesture() {
+    const attempt = ++unlockAttempt;
+    unlockPending = true;
+    unlocked = true;
+    try {
+      const promise = context.resume();
+      Promise.resolve(promise).then(() => {
+        if (disposed || attempt !== unlockAttempt) return;
+        if (context.state !== 'running') { unlockFailed(attempt); return; }
+        unlockPending = false;
+        if (started) sync();
+        else if (suspended || document.hidden) stop();
+      }).catch(() => unlockFailed(attempt));
+    } catch (_) { unlockFailed(attempt); }
   }
 
   // Resume inside the synchronous browser input stack, before Flutter handles it.
@@ -81,30 +97,37 @@
     if (event.type === 'keydown' && (!key || event.repeat || event.isComposing ||
         event.altKey || event.ctrlKey || event.metaKey)) return;
     if (disposed || unlocked || document.hidden) return;
-    const attempt = ++unlockAttempt;
     try {
       if (!context && !construct()) return;
       unlockPointer = key ? null : event.pointerId;
       unlockKey = key;
       gestureEnded = false;
-      unlockPending = true;
-      unlocked = true;
-      const promise = context.resume();
-      Promise.resolve(promise).then(() => {
-        if (disposed || attempt !== unlockAttempt) return;
-        unlockPending = false;
-        if (started) sync();
-        else if (suspended || document.hidden) stop();
-      }).catch(() => unlockFailed(attempt));
-    } catch (_) { unlockFailed(attempt); }
+      resumeFromGesture();
+    } catch (_) { unlockFailed(unlockAttempt); }
   }
   function endGesture(event) {
-    if (!unlocked) return;
-    if (event.type === 'keyup') {
-      if (unlockKey && activationKey(event) === unlockKey) gestureEnded = true;
-    } else if (unlockKey === null && event.pointerId === unlockPointer) {
-      gestureEnded = true;
+    if (disposed || !context || event.isTrusted !== true) return;
+    const matches = event.type === 'keyup'
+      ? unlockKey !== null && activationKey(event) === unlockKey
+      : unlockKey === null && unlockPointer !== null && event.pointerId === unlockPointer;
+    if (!matches) return;
+    if (event.type === 'pointercancel') {
+      unlockPointer = null;
+      unlockKey = null;
+      gestureEnded = false;
+      if (!started) {
+        unlockAttempt++;
+        unlocked = false;
+        unlockPending = false;
+        stop();
+      }
+      return;
     }
+    if (document.hidden) return;
+    gestureEnded = true;
+    // Mobile browsers may grant activation only at release. Call synchronously
+    // even if the press resume is still pending or has already been rejected.
+    resumeFromGesture();
   }
   window.addEventListener('pointerdown', unlock, true);
   window.addEventListener('pointerup', endGesture, true);
@@ -158,11 +181,12 @@
     const t = context.currentTime;
     const r = state.richness;
     const night = state.sleeping;
-    const rain = /rain|storm|thunder|lluvia|tormenta/i.test(state.weather);
     const storm = /storm|thunder|tormenta/i.test(state.weather);
-    smooth(beds[0].gain.gain, (0.045 + 0.015 * Math.sin(t * 0.17)) * (rain ? 1.4 : 1), 1.5);
+    const rainLevel = storm ? 1 : /drizzle/i.test(state.weather) ? 0.35
+      : /rain|lluvia/i.test(state.weather) ? 1 : 0;
+    smooth(beds[0].gain.gain, (0.045 + 0.015 * Math.sin(t * 0.17)) * (1 + 0.4 * rainLevel), 1.5);
     smooth(beds[1].gain.gain, 0.012 + 0.008 * (1 + Math.sin(t * 0.31)), 1.2);
-    smooth(beds[2].gain.gain, rain ? 0.13 : 0, 1.5);
+    smooth(beds[2].gain.gain, 0.13 * rainLevel, 1.5);
     if (t >= next.cricket) {
       next.cricket = t + random(1.4, 4.5) / (0.5 + r);
       const hz = random(3400, 4700);

@@ -7,7 +7,6 @@ For the game:
 
 ```sh
 npm ci
-flutter pub get
 npm run build
 npm run check:assets
 npx wrangler login
@@ -35,5 +34,9 @@ API secrets, or audio downloads are needed. Static assets are served directly.
 20,000-file ceiling. The Flutter engine is bundled locally rather than loaded
 from a third-party CDN. No service worker or offline PWA is registered.
 
-The forge had no Cloudflare authentication (`wrangler whoami`), so a live
-Cloudflare deployment or DNS activation cannot be claimed from this session.
+The local Wrangler CLI has no login, but the connected Cloudflare account
+provides read-only deployment inspection. The `ranitas` Worker is connected to
+GitHub `8007342/ranitas`, watching `main` with `npm run build` and
+`npx wrangler deploy`. Its construction-page build succeeded on 2026-10-23
+and its log confirms `ranitas.tlatoani.net (custom domain)`. Merging into main
+therefore triggers the configured production build without a local CLI login.
