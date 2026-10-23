@@ -328,145 +328,221 @@ class PondRenderer {
   }
 
   void _subsurfaceWildlife(ui.Canvas c, PondModel m, double motion) {
-    // 1. Darting pond tadpoles in deeper water
-    final tadpoleAlpha = (.18 + m.richness * .22).clamp(0.18, 0.40);
+    final deepWater = m.biome == 'grotto'
+        ? const ui.Color(0xff082833)
+        : const ui.Color(0xff0b303c);
+
+    int submergeColor(int hex, double depth, double viewportDist) {
+      final t = (depth * .76 + viewportDist * .24).clamp(0.12, 0.92);
+      return ui.Color.lerp(ui.Color(hex), deepWater, t)!.toARGB32();
+    }
+
+    // 1. Darting pond tadpoles (depth-attenuated & perspective-scaled, no detached bean shadow)
+    final tadpoleAlpha = (.24 + m.richness * .24).clamp(0.24, 0.48);
     for (final tp in m.tadpoles) {
-      final dirX = math.cos(tp.heading);
-      final dirY = math.sin(tp.heading) * .6;
+      final vDist = ((338.0 - tp.y) / 146.0).clamp(0.0, 1.0);
+      final tScale = 1.05 - .48 * vDist;
+      final dirX = math.cos(tp.heading) * tScale;
+      final dirY = math.sin(tp.heading) * (.62 - .22 * vDist) * tScale;
       final perpX = -dirY;
       final perpY = dirX;
-      final wag = reducedMotion ? 0.0 : math.sin(tp.swimPhase) * 1.8;
-      // Tadpole shadow on silt
-      _oval(c, tp.x, tp.y + 4, 3, 1.5, 0xff061d26, tadpoleAlpha * .45);
-      // Tadpole head & undulating tail
-      _oval(c, tp.x, tp.y, 2.5, 1.8, 0xff193c45, tadpoleAlpha);
+      final wag = reducedMotion ? 0.0 : math.sin(tp.swimPhase) * 1.8 * tScale;
+      final headCol = submergeColor(0xff1e4752, .45, vDist);
+      final tailCol = submergeColor(0xff2e636e, .55, vDist);
+      _oval(
+        c,
+        tp.x,
+        tp.y,
+        2.6 * tScale,
+        1.7 * tScale * (.68 - .25 * vDist),
+        headCol,
+        tadpoleAlpha,
+      );
       _line(
         c,
         tp.x - dirX * 2,
         tp.y - dirY * 2,
-        tp.x - dirX * 7 + perpX * wag,
-        tp.y - dirY * 7 + perpY * wag,
-        0xff27555e,
-        tadpoleAlpha * .85,
+        tp.x - dirX * 7.5 + perpX * wag,
+        tp.y - dirY * 7.5 + perpY * wag,
+        tailCol,
+        tadpoleAlpha * .82,
       );
     }
 
     // 2. Ornamental Multi-Segment Koi Fish (Kohaku, Yamabuki, Showa, Asagi)
-    //    Visible throughout the session with richness brightening their luster
-    final baseKoiVisibility = (.38 + m.richness * .38).clamp(0.38, 0.76);
-    for (final k in m.koi) {
-      final depthFade = (1.0 - k.depth * .45).clamp(0.45, 0.92);
-      final alpha = baseKoiVisibility * depthFade;
-      final dirX = math.cos(k.heading);
-      final dirY = math.sin(k.heading) * .55;
-      final perpX = -dirY;
-      final perpY = dirX;
+    //    Perspective-scaled by distance from viewport (y), foreshortened by viewing
+    //    angle & dive pitch, and shaded per-segment via Beer-Lambert water absorption.
+    final baseKoiVisibility = (.58 + m.richness * .30).clamp(0.58, 0.88);
+    // Sort Koi from farthest/deepest to nearest/shallowest for true underwater painter's order
+    final sortedKoi = [...m.koi]
+      ..sort((a, b) => (a.y - a.depth * 25).compareTo(b.y - b.depth * 25));
 
-      // Palette per Koi variety (blended with deep teal water tint)
-      final (int bodyCol, int patch1, int patch2, int finCol) =
+    for (final k in sortedKoi) {
+      final viewportDist = ((338.0 - k.y) / 146.0).clamp(0.0, 1.0);
+      // Perspective scale: smaller near far bank (y~195), larger in foreground (y~335),
+      // and slightly smaller as the fish dives deeper into the water column.
+      final scale = (1.14 - .62 * viewportDist) * (1.0 - .20 * k.depth);
+      // Viewing angle foreshortening: steeper in foreground, shallower grazing angle near horizon
+      final aspectY = (.68 - .30 * viewportDist).clamp(0.36, 0.70);
+      final pitchCos = math.cos(k.pitch).clamp(0.76, 1.0);
+
+      final dirX = math.cos(k.heading) * scale * pitchCos;
+      final dirY = math.sin(k.heading) * aspectY * scale * pitchCos;
+      final perpX = -math.sin(k.heading) * scale;
+      final perpY = math.cos(k.heading) * aspectY * scale;
+
+      // Per-segment depth (i=0 snout .. i=6 caudal tail tip):
+      // Diving down (pitch > 0) makes head deeper than tail;
+      // Rising up (pitch < 0) brings head into the sunlit surface layer first.
+      double segDepth(int i) =>
+          (k.depth + math.sin(k.pitch) * (2.5 - i) * .095).clamp(0.05, 0.96);
+
+      double segAlpha(double sDepth) =>
+          (baseKoiVisibility * (1.0 - sDepth * .48) * (1.0 - viewportDist * .18))
+              .clamp(0.22, 0.90);
+
+      final (int rawBody, int rawPatch1, int rawPatch2, int rawFin) =
           switch (k.variant % 4) {
-            0 => (0xffe8e2d3, 0xffd94832, 0xffe8684a, 0xfff0ebe1), // Kohaku
-            1 => (0xffeab344, 0xffffdf7d, 0xffcf9129, 0xfff7dca0), // Yamabuki
-            2 => (0xffe3ded2, 0xffcc392f, 0xff1e2d38, 0xffe6e0d5), // Showa
-            _ => (0xff6794b0, 0xff94bfd9, 0xffe37349, 0xffeb8960), // Asagi
+            0 => (0xfff4efe2, 0xffe04832, 0xfff06a4d, 0xfff7f2e6), // Kohaku
+            1 => (0xfff5bc47, 0xffffe484, 0xffd49326, 0xffffe8ad), // Yamabuki
+            2 => (0xffede8dc, 0xffd43b30, 0xff1c2b36, 0xfff0ebe0), // Showa
+            _ => (0xff6e9db8, 0xff9ec8e0, 0xffeb784d, 0xfff29168), // Asagi
           };
 
-      // Soft subsurface shadow on pond floor below Koi
-      final shadowDepthOffset = 4.0 + k.depth * 6.0;
-      _oval(
-        c,
-        k.x,
-        k.y + shadowDepthOffset,
-        12,
-        4,
-        0xff071d26,
-        alpha * .32,
-      );
-
-      // Articulated 5-segment sinusoidal spine:
-      // i=0 (head), i=1 (shoulders), i=2 (mid-body), i=3 (peduncle), i=4 (caudal tail)
       double segX(int i, double sOffset) {
         final wave = reducedMotion
             ? 0.0
-            : (0.4 + 0.45 * i * i) * math.sin(k.swimPhase - i * 0.9);
+            : (0.25 + 0.28 * i * i) * math.sin(k.swimPhase - i * 0.75);
         return k.x + dirX * sOffset + perpX * wave;
       }
 
       double segY(int i, double sOffset) {
         final wave = reducedMotion
             ? 0.0
-            : (0.4 + 0.45 * i * i) * math.sin(k.swimPhase - i * 0.9);
+            : (0.25 + 0.28 * i * i) * math.sin(k.swimPhase - i * 0.75);
         return k.y + dirY * sOffset + perpY * wave;
       }
 
-      final hx = segX(0, 7);
-      final hy = segY(0, 7);
-      final sx = segX(1, 2);
-      final sy = segY(1, 2);
-      final mx = segX(2, -4);
-      final my = segY(2, -4);
-      final px = segX(3, -9);
-      final py = segY(3, -9);
-      final tx = segX(4, -14);
-      final ty = segY(4, -14);
+      // 7 spine nodes from snout (0) to forked tail tip (6)
+      const offsets = [8.5, 5.5, 1.5, -3.0, -7.5, -11.5, -16.5];
+      const radii = [2.8, 4.4, 5.8, 5.2, 3.8, 2.4, 1.5];
 
-      // Swept pectoral fins flanking shoulders
-      final finFlutter = reducedMotion
+      // Swept pectoral & pelvic fins (drawn beneath the body core at shoulder/mid depth)
+      final shoulderDepth = (segDepth(2) + .08).clamp(0.08, 0.96);
+      final finAlpha = segAlpha(shoulderDepth) * .62;
+      final finColor = submergeColor(rawFin, shoulderDepth, viewportDist);
+      final sx = segX(2, offsets[2]);
+      final sy = segY(2, offsets[2]);
+      final finBeat = reducedMotion
           ? 0.0
-          : math.sin(k.swimPhase * 1.2) * 1.2;
-      _oval(
-        c,
-        sx + perpX * (5.5 + finFlutter),
-        sy + perpY * (5.5 + finFlutter),
-        3.5,
-        2.0,
-        finCol,
-        alpha * .52,
-      );
-      _oval(
-        c,
-        sx - perpX * (5.5 + finFlutter),
-        sy - perpY * (5.5 + finFlutter),
-        3.5,
-        2.0,
-        finCol,
-        alpha * .52,
-      );
+          : math.sin(k.swimPhase * 1.15 + .4) * 1.1;
+      for (final side in [-1.0, 1.0]) {
+        final fx = sx - dirX * 1.2 + perpX * side * (5.2 + finBeat);
+        final fy = sy - dirY * 1.2 + perpY * side * (5.2 + finBeat);
+        _oval(
+          c,
+          fx,
+          fy,
+          3.4 * scale,
+          2.0 * scale * aspectY,
+          finColor,
+          finAlpha,
+        );
+      }
 
-      // Flowing forked caudal tail fin
+      // Flowing forked caudal veil tail (node 5 -> node 6)
+      final tailDepth = segDepth(6);
+      final tailAlpha = segAlpha(tailDepth) * .68;
+      final tailCol = submergeColor(rawFin, tailDepth, viewportDist);
+      final px = segX(5, offsets[5]);
+      final py = segY(5, offsets[5]);
+      final tx = segX(6, offsets[6]);
+      final ty = segY(6, offsets[6]);
       _line(
         c,
         px,
         py,
-        tx + perpX * 3,
-        ty + perpY * 3,
-        finCol,
-        alpha * .58,
-        2,
+        tx + perpX * 3.2,
+        ty + perpY * 3.2,
+        tailCol,
+        tailAlpha,
+        math.max(1, (2.0 * scale).roundToDouble()),
       );
       _line(
         c,
         px,
         py,
-        tx - perpX * 3,
-        ty - perpY * 3,
-        finCol,
-        alpha * .58,
-        2,
+        tx - perpX * 3.2,
+        ty - perpY * 3.2,
+        tailCol,
+        tailAlpha,
+        math.max(1, (2.0 * scale).roundToDouble()),
       );
 
-      // Tapered body segments (tail base -> mid -> shoulders -> head)
-      _oval(c, px, py, 3.0, 2.0, bodyCol, alpha * .82);
-      _oval(c, mx, my, 5.0, 3.0, bodyCol, alpha * .88);
-      _oval(c, mx, my, 3.5, 2.2, patch2, alpha * .82);
-      _oval(c, sx, sy, 6.2, 3.6, bodyCol, alpha * .92);
-      _oval(c, sx + dirX * 1.5, sy + dirY * 1.5, 4.2, 2.5, patch1, alpha * .9);
-      _oval(c, hx, hy, 4.2, 2.6, bodyCol, alpha * .92);
-      _oval(c, hx - dirX, hy - dirY, 2.5, 1.6, patch1, alpha * .85);
+      // Draw body segments ordered from deepest to shallowest so diving/rising
+      // self-occlusion matches the 3D water column
+      final segOrder = [5, 4, 3, 2, 1, 0]
+        ..sort((a, b) => segDepth(b).compareTo(segDepth(a)));
 
-      // Subtle dorsal ridge & eyes
-      _line(c, sx, sy - 1, mx, my - 1, finCol, alpha * .55);
-      _rect(c, hx + dirX * 2, hy - 1, 1, 1, 0xff162d36, alpha * .85);
+      for (final i in segOrder) {
+        final cx = segX(i, offsets[i]);
+        final cy = segY(i, offsets[i]);
+        final r = radii[i] * scale;
+        final ry = math.max(1.0, r * (.58 + .28 * aspectY));
+        final sDepth = segDepth(i);
+        final sAlpha = segAlpha(sDepth);
+
+        // Concentric subsurface water-scatter rim (hugs the fish body, never detached)
+        final haloCol = submergeColor(0xff072029, sDepth + .12, viewportDist);
+        _oval(c, cx, cy + .6 * scale, r + 1.0, ry + .6, haloCol, sAlpha * .42);
+
+        // Main depth-attenuated body segment
+        final bCol = submergeColor(rawBody, sDepth, viewportDist);
+        _oval(c, cx, cy, r, ry, bCol, sAlpha);
+
+        // Dorsal pattern markings (Kohaku / Yamabuki / Showa / Asagi)
+        if (i == 1 || i == 2) {
+          final p1Col = submergeColor(rawPatch1, sDepth - .03, viewportDist);
+          _oval(c, cx, cy - .3 * scale, r * .72, ry * .72, p1Col, sAlpha * .95);
+        } else if (i == 3 || i == 4) {
+          final p2Col = submergeColor(rawPatch2, sDepth, viewportDist);
+          _oval(c, cx, cy, r * .68, ry * .68, p2Col, sAlpha * .92);
+        }
+
+        // Overhead underwater caustic light glint when segment is near surface
+        if (sDepth < 0.36 && (i == 1 || i == 2 || i == 3)) {
+          final glintAlpha = ((0.36 - sDepth) / 0.36) * sAlpha * .55;
+          final glintCol = submergeColor(0xffb8f7ee, sDepth * .5, viewportDist);
+          _rect(c, cx - r * .35, cy - ry * .45, r * .7, 1, glintCol, glintAlpha);
+        }
+      }
+
+      // Eyes on head segment (node 1) when shallow/mid-depth
+      final headDepth = segDepth(1);
+      if (headDepth < 0.78) {
+        final hx = segX(1, offsets[1]);
+        final hy = segY(1, offsets[1]);
+        final eyeCol = submergeColor(0xff10262e, headDepth, viewportDist);
+        final eyeAlpha = segAlpha(headDepth) * .88;
+        _rect(
+          c,
+          hx + perpX * 2.2,
+          hy + perpY * 2.2,
+          1,
+          1,
+          eyeCol,
+          eyeAlpha,
+        );
+        _rect(
+          c,
+          hx - perpX * 2.2,
+          hy - perpY * 2.2,
+          1,
+          1,
+          eyeCol,
+          eyeAlpha,
+        );
+      }
     }
   }
 

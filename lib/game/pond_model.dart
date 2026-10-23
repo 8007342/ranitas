@@ -137,6 +137,7 @@ class PondModel {
   int aiEvaluations = 0;
   double? _durationOverride;
   double? _pressStarted;
+  bool _launchedFromPress = false;
   double _remainder = 0;
   double _aiClock = 0;
   double _spawnClock = 0;
@@ -145,37 +146,49 @@ class PondModel {
   double _gustDirection = 1;
   double _tapAgitation = 0;
   double _lastRelease = -100;
-  String? _queuedAction;
   bool _settling = false;
   static const double _step = 1 / 60;
+  static const double _launchDelay = .06;
 
-  /// Repeated down events are ignored. The first completed gesture starts play.
+  /// Repeated down events or presses while a frog is in flight are ignored.
   void press() {
-    if (sleeping || _settling || pressing) return;
+    if (sleeping || _settling || pressing || _busy) return;
     _pressStarted = time + _remainder;
+    _launchedFromPress = false;
   }
 
-  /// Holds below .18s tap, below .65s jump low, otherwise jump high.
-  /// While busy, only the most recent gesture is retained (no runaway queue).
+  /// Immediate lift (< .18s) -> 'tap'; lift during jump (.18s..<.52s) -> 'low';
+  /// hold past jump (>= .52s) -> 'high'.
   void release() {
     if (!pressing) return;
     final held = holdDuration;
+    final launched = _launchedFromPress;
     _pressStarted = null;
+    _launchedFromPress = false;
     if (sleeping || _settling) return;
     started = true;
     if (time - _lastRelease < .3) _tapAgitation = min(1, _tapAgitation + .2);
     _lastRelease = time;
-    engagement = min(1, engagement + .075);
-    _queuedAction = held < .18 - 1e-9
+    final action = held < .18 - 1e-9
         ? 'tap'
-        : held < .65 - 1e-9
+        : held < .52 - 1e-9
         ? 'low'
         : 'high';
-    _dispatch();
+    if (!launched) {
+      if (!_busy) {
+        engagement = min(1, engagement + .075);
+        _launch(frogs[0], action);
+      }
+    } else if (frogs[0].airborne) {
+      _sustainJump(frogs[0], action);
+    }
   }
 
-  /// Pointer cancellation never starts play or launches a frog.
-  void cancelPress() => _pressStarted = null;
+  /// Pointer cancellation before takeoff never starts play or launches a frog.
+  void cancelPress() {
+    _pressStarted = null;
+    _launchedFromPress = false;
+  }
 
   /// Fixed substeps keep flight, bug motion and AI independent of frame rate.
   /// Invalid/negative deltas are rejected; zero is a no-op. No time is dropped.
@@ -204,7 +217,6 @@ class PondModel {
       if (elapsed + 1e-9 >= duration) {
         progress = 1;
         _settling = true;
-        _queuedAction = null;
         cancelPress();
       }
     }
@@ -221,6 +233,7 @@ class PondModel {
               ? 'dusk'
               : 'night');
     _tapAgitation *= exp(-dt / 3);
+    _updateHoldJump();
     _updateWind(dt);
     _updateBugs(dt);
     for (final frog in frogs) {
@@ -249,7 +262,6 @@ class PondModel {
       }
       return;
     }
-    _dispatch();
     _aiClock += dt;
     if (_aiClock + 1e-9 >= .25) {
       _aiClock -= .25;
@@ -259,10 +271,34 @@ class PondModel {
 
   bool get _busy => frogs.any((f) => f.airborne || f.swimming);
 
-  void _dispatch() {
-    if (_queuedAction == null || _busy || _settling || sleeping) return;
-    _launch(frogs[0], _queuedAction!);
-    _queuedAction = null;
+  void _updateHoldJump() {
+    if (!pressing || sleeping || _settling) return;
+    final held = holdDuration;
+    if (!_launchedFromPress && held >= _launchDelay - 1e-9) {
+      if (_busy) {
+        cancelPress();
+        return;
+      }
+      started = true;
+      _launchedFromPress = true;
+      engagement = min(1, engagement + .075);
+      _launch(frogs[0], 'tap');
+    }
+    if (_launchedFromPress && frogs[0].airborne) {
+      if (held >= .52 - 1e-9 && frogs[0].action != 'high') {
+        _sustainJump(frogs[0], 'high');
+      } else if (held >= .18 - 1e-9 && frogs[0].action == 'tap') {
+        _sustainJump(frogs[0], 'low');
+      }
+    }
+  }
+
+  void _sustainJump(FrogState frog, String newAction) {
+    const rank = {'tap': 0, 'low': 1, 'high': 2};
+    if ((rank[newAction] ?? 0) <= (rank[frog.action] ?? 0)) return;
+    frog.action = newAction;
+    frog._duration = _flightDuration(newAction);
+    frog.jumpPhase = (frog._flightElapsed / frog._duration).clamp(0.0, .98);
   }
 
   static double _flightDuration(String action) => action == 'tap'
@@ -301,9 +337,14 @@ class PondModel {
     final radius = .005 + random.nextDouble() * .01;
     final angle = pi / 2 + (random.nextDouble() - .5) * .4;
     final sign = random.nextBool() ? 1 : -1;
+    final ySign = frogs[1 - frog.index].leafIndex == frog._targetLeaf
+        ? (frog.index == 0 ? -1 : 1)
+        : sign;
     frog._toX += cos(angle) * radius * sign;
-    frog._toY += sin(angle) * radius * sign;
+    frog._toY += sin(angle) * radius * ySign;
     frog._duration = _flightDuration(action);
+    frog._flightElapsed = 0;
+    frog._arcHeight = _height(action);
     frog._returning = returning;
     frog.jumpPhase = 0;
     frog.airborne = true;
@@ -357,13 +398,16 @@ class PondModel {
       return;
     }
     if (!frog.airborne) return;
-    frog.jumpPhase = min(1, frog.jumpPhase + dt / frog._duration);
+    frog._flightElapsed += dt;
+    frog.jumpPhase = min(1, frog._flightElapsed / frog._duration);
+    frog._arcHeight +=
+        (_height(frog.action) - frog._arcHeight) * (1 - exp(-dt * 18));
     final p = frog.jumpPhase;
     frog.x = frog._fromX + (frog._toX - frog._fromX) * p;
     frog.y =
         frog._fromY +
         (frog._toY - frog._fromY) * p -
-        sin(pi * p) * (_height(frog.action) + frog.index * .018);
+        sin(pi * p) * (frog._arcHeight + frog.index * .018);
     if (!_settling && p > .12 && p < .88) {
       for (final bug in bugs) {
         if (!bug.alive || bug.opacity < .25) continue;
@@ -390,7 +434,12 @@ class PondModel {
         frog.swimming = true;
         frog.bellyFlop = 1;
         frog._swimAge = 0;
-        frog._splashX = (frog._toX + wind * .04).clamp(.05, .95);
+        var splashX = (frog._toX + wind * .04).clamp(.05, .95);
+        final other = frogs[1 - frog.index];
+        if ((splashX - other.x).abs() < .045) {
+          splashX = other.x + (frog._toX <= other.x ? -.048 : .048);
+        }
+        frog._splashX = splashX.clamp(.05, .95);
         frog.x = frog._splashX;
         frog.y = frog._toY + .065;
         frog.facing = frog._toX >= frog._splashX ? 1.0 : -1.0;
@@ -529,7 +578,7 @@ class PondModel {
   void _evaluateJev() {
     aiEvaluations++;
     final frog = frogs[1];
-    if (_busy || frog.cooldown > 0 || _queuedAction != null) return;
+    if (_busy || frog.cooldown > 0 || pressing) return;
     BugState? nearest;
     var nearestDistance = double.infinity;
     for (final bug in bugs) {
@@ -891,8 +940,15 @@ class PondModel {
 
       k.x = (k.x + cos(k.heading) * speed * dt).clamp(72.0, 568.0);
       k.y = (k.y + sin(k.heading) * speed * .55 * dt).clamp(192.0, 338.0);
-      final baseDepth = .24 + (k.index % 3) * .16 + sin(time * .3 + k.index) * .08;
-      k.depth = (baseDepth + k.startleTimer * .28).clamp(.15, .85);
+      final prevDepth = k.depth;
+      final targetDepth = (
+        .36 +
+        (k.index % 3) * .12 +
+        sin(time * .38 + k.index * 1.7) * .26 +
+        k.startleTimer * .35
+      ).clamp(.08, .92);
+      k.depth += (targetDepth - k.depth) * (1 - exp(-dt * 2.8));
+      k.pitch = ((k.depth - prevDepth) / max(dt, 1e-4) * 1.8).clamp(-.45, .45);
     }
 
     for (final t in tadpoles) {
@@ -939,7 +995,8 @@ class FrogState {
   double cooldown = 1;
   double bellyFlop = 0;
   double _fromX = 0, _fromY = 0, _toX = 0, _toY = 0;
-  double _duration = 1, _swimAge = 0, _splashX = 0;
+  double _duration = 1, _flightElapsed = 0, _arcHeight = .13;
+  double _swimAge = 0, _splashX = 0;
   int _targetLeaf;
   bool _returning = false;
 
@@ -1016,6 +1073,7 @@ class KoiState {
   double targetHeading;
   double swimPhase;
   double depth;
+  double pitch = 0;
   double startleTimer = 0;
 }
 

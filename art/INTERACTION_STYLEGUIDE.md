@@ -664,3 +664,20 @@ When testing implementations against this styleguide:
 - [ ] **Composable Layers**: Koi and tadpoles render under surface ripples; ripples modulate water surface with highlight/shadow rings; pads and frogs render above surface ripples.
 - [ ] **Koi Patterns**: Kohaku (snow/vermilion), Yamabuki (gold), Showa (black/red/white), and Asagi (indigo/rust) exhibit depth-attenuated colors.
 - [ ] **Fullscreen Layout**: Resizing browser or running on ultrawide display fills 100% of viewport with zero letterbox bars while keeping pads centered in safe arena.
+
+---
+
+## 7. Valve GameFlow-Tuned Jump Controller & Input Responsiveness
+
+Following Valve's GameFlow / playtesting responsiveness principles:
+1. **Near-Immediate Takeoff (`<= 60ms` Anticipation)**:
+   - Pressing mouse, touch, or `Space`/`Enter` never traps the frog in an indefinite crouch.
+   - Within `0.06s` (60ms) of `press()`—or immediately upon `release()` if tapped faster than `0.06s`—the frog launches into the air.
+2. **Variable Jump Height via Release Timing (Sustain Window)**:
+   - **Lift immediately (`holdDuration < 0.18s`)**: Quick `'tap'` hop (`height = 0.13`, `duration = 0.68s`).
+   - **Lift around takeoff / early ascent (`0.18s <= holdDuration < 0.52s`)**: Small/medium `'low'` jump (`height = 0.25`, `duration = 0.95s`).
+   - **Hold long past takeoff (`holdDuration >= 0.52s`)**: High/long `'high'` jump (`height = 0.39`, `duration = 1.30s`), smoothly blending the vertical arc height in flight with $C^0$ continuity.
+3. **Zero Mid-Air Input Queueing**:
+   - Any `press()` or tap while a frog is `airborne` or `swimming` (`_busy == true`) is **ignored**, preventing accidental buffered jumps after landing.
+4. **Global Desktop Spacebar Support**:
+   - `HardwareKeyboard.instance` handles `Space` and `Enter` globally across the browser viewport even before a canvas focus click.

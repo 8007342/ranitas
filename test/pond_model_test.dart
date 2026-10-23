@@ -31,7 +31,7 @@ void main() {
     final model = PondModel(seed: 7);
     model.update(20);
     model.press();
-    model.update(2);
+    model.update(.04);
     model.cancelPress();
     model.release();
     expect(model.started, isFalse);
@@ -46,22 +46,26 @@ void main() {
     }
   });
 
-  test('hold boundaries choose predictable tap, low and high arcs', () {
+  test('hold boundaries choose predictable tap, low and high arcs and launch near-immediately', () {
     for (final entry in <double, String>{
       0: 'tap',
       .179: 'tap',
       .18: 'low',
-      .649: 'low',
+      .519: 'low',
+      .52: 'high',
       .65: 'high',
     }.entries) {
       final model = PondModel(seed: 4);
       model.press();
       model.update(entry.key);
-      model.press(); // Duplicate pointer down must not reset the hold.
+      if (entry.key >= .08) {
+        // Frog launches near-immediately while the button is still held down
+        expect(model.frogs[0].airborne, isTrue);
+      }
+      model.press(); // Duplicate pointer down or mid-air press is ignored.
       model.release();
       expect(model.frogs[0].action, entry.value);
       expect(model.started, isTrue);
-      expect(model.elapsed, 0);
       model.update(1.4);
       expect(model.frogs[0].leafIndex, 1);
       final frog = model.frogs[0];
@@ -224,7 +228,7 @@ void main() {
       final frog = model.frogs[0];
       expect(frog.currentPose(), 'idle');
       model.press();
-      model.update(.25);
+      model.update(.04);
       expect(frog.currentPose(charging: model.pressing), 'charging');
       // Place a live bug along frog 0's low jump arc so it chomps mid-flight
       model.bugs.add(
@@ -237,10 +241,12 @@ void main() {
           species: 'dragonfly',
         )..opacity = 1,
       );
-      model.release();
+      model.update(.04);
       expect(frog.airborne, isTrue);
       expect(frog.currentPose(), 'launching');
       final seenPoses = <String>{frog.currentPose()};
+      model.update(.14);
+      model.release();
       while (frog.airborne) {
         model.update(1 / 60);
         seenPoses.add(frog.currentPose());
@@ -325,7 +331,7 @@ void main() {
       model.update(100);
       expect(model.bugs, isEmpty);
       model.press();
-      model.update(3);
+      model.update(.04);
       expect(model.bugs, isEmpty);
       model.release();
       expect(model.bugs, isEmpty);

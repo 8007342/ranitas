@@ -91,17 +91,28 @@
   }
 
   // Resume inside the synchronous browser input stack, before Flutter handles it.
+  let lastActionCroak = 0;
   function unlock(event) {
     const key = event.type === 'keydown' ? activationKey(event) : null;
+    if (key === 'Space') event.preventDefault();
     if (event.isTrusted === false) return;
     if (event.type === 'keydown' && (!key || event.repeat || event.isComposing ||
         event.altKey || event.ctrlKey || event.metaKey)) return;
-    if (disposed || unlocked || document.hidden) return;
+    if (disposed || document.hidden) return;
+    if (unlocked && started && context && context.state === 'running') {
+      const now = context.currentTime;
+      if (now - lastActionCroak > 0.65 && !state.sleeping) {
+        lastActionCroak = now;
+        playCroak(random(0.95, 1.18));
+      }
+      return;
+    }
     try {
       if (!context && !construct()) return;
       unlockPointer = key ? null : event.pointerId;
       unlockKey = key;
-      gestureEnded = false;
+      gestureEnded = true;
+      started = true;
       resumeFromGesture();
     } catch (_) { unlockFailed(unlockAttempt); }
   }
@@ -176,44 +187,53 @@
     source.stop(at + duration + 0.02);
   }
 
+  function playCroak(pitchScale = 1.0) {
+    if (!active() || context.state !== 'running') return;
+    const baseHz = random(148, 195) * pitchScale;
+    // Syllable 1: resonant throat "rib-"
+    voice('triangle', baseHz, 0.16, 0.22, baseHz * 1.38, 0);
+    voice('sine', baseHz * 2.02, 0.14, 0.14, baseHz * 2.65, 0.01);
+    // Syllable 2: expressive upward-then-downward "-bit!"
+    voice('triangle', baseHz * 1.12, 0.24, 0.26, baseHz * 0.72, 0.18);
+    voice('sine', baseHz * 2.24, 0.20, 0.16, baseHz * 1.45, 0.19);
+    // Subtle pad/water plop resonance
+    voice('sine', random(520, 760), 0.11, 0.09, random(210, 310), 0.04);
+  }
+
   function tick() {
     if (!active() || context.state !== 'running') return;
     const t = context.currentTime;
-    const r = state.richness;
+    const r = Math.max(0.25, state.richness);
     const night = state.sleeping;
     const storm = /storm|thunder|tormenta/i.test(state.weather);
     const rainLevel = storm ? 1 : /drizzle/i.test(state.weather) ? 0.35
       : /rain|lluvia/i.test(state.weather) ? 1 : 0;
-    smooth(beds[0].gain.gain, (0.045 + 0.015 * Math.sin(t * 0.17)) * (1 + 0.4 * rainLevel), 1.5);
-    smooth(beds[1].gain.gain, 0.012 + 0.008 * (1 + Math.sin(t * 0.31)), 1.2);
-    smooth(beds[2].gain.gain, 0.13 * rainLevel, 1.5);
+    smooth(beds[0].gain.gain, (0.065 + 0.02 * Math.sin(t * 0.17)) * (1 + 0.4 * rainLevel), 1.5);
+    smooth(beds[1].gain.gain, 0.022 + 0.012 * (1 + Math.sin(t * 0.31)), 1.2);
+    smooth(beds[2].gain.gain, 0.16 * rainLevel, 1.5);
     if (t >= next.cricket) {
-      next.cricket = t + random(1.4, 4.5) / (0.5 + r);
+      next.cricket = t + random(1.4, 3.8) / (0.5 + r);
       const hz = random(3400, 4700);
-      for (let i = 0; i < 3; i++) voice('sine', hz, 0.065, night ? 0.025 : 0.018, hz * 0.98, i * 0.14);
+      for (let i = 0; i < 3; i++) voice('sine', hz, 0.065, night ? 0.045 : 0.032, hz * 0.98, i * 0.14);
     }
     if (t >= next.water) {
-      next.water = t + random(2, 6);
-      voice('sine', random(900, 1500), 0.22, 0.035, random(300, 500));
+      next.water = t + random(1.8, 4.8);
+      voice('sine', random(900, 1500), 0.22, 0.065, random(300, 500));
     }
     if (t >= next.frog) {
-      next.frog = t + random(4, 10) / (0.5 + r);
-      if (r > 0.22) {
-        const hz = random(140, 230);
-        voice('triangle', hz, 0.28, 0.045, hz * 0.65);
-        voice('sine', hz * 1.07, 0.23, 0.03, hz * 0.7, 0.35);
-      }
+      next.frog = t + random(2.6, 5.8) / (0.6 + r);
+      playCroak(random(0.88, 1.24));
     }
     if (t >= next.owl) {
-      next.owl = t + random(18, 35);
-      if (night && r > 0.45) {
-        voice('sine', 380, 0.65, 0.035, 320);
-        voice('sine', 350, 0.8, 0.03, 300, 0.95);
+      next.owl = t + random(14, 28);
+      if (night || r > 0.35) {
+        voice('sine', 380, 0.65, 0.06, 320);
+        voice('sine', 350, 0.8, 0.05, 300, 0.95);
       }
     }
     if (t >= next.thunder) {
       next.thunder = t + random(22, 45);
-      if (storm) voice('noise', 180, 3.5, 0.12);
+      if (storm) voice('noise', 180, 3.5, 0.18);
     }
   }
 
@@ -236,7 +256,7 @@
     context.resume().then(() => {
       if (disposed || attempt !== unlockAttempt) return;
       if (!active()) { stop(); return; }
-      smooth(master.gain, 0.32 * state.richness * (state.sleeping ? 0.7 : 1), 0.6);
+      smooth(master.gain, (0.76 + 0.20 * state.richness) * (state.sleeping ? 0.68 : 1), 0.35);
       if (timer === undefined) {
         tick();
         timer = window.setInterval(tick, 250);

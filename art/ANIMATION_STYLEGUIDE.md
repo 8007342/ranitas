@@ -453,3 +453,22 @@ $$I_{\text{startle}} = \text{clamp}\left(1.0 - \frac{D}{R_{\text{startle}}},\, 0
 | **Startle** | $R_{\text{startle}}$ | `160.0` | Pixels | Shockwave detection radius for pad/flop impact |
 | **Startle** | $v_{\text{boost, max}}$ | `+65.0` | Pixels / sec | Maximum burst speed addition upon startle |
 | **Startle** | $\lambda_{\text{relax}}$ | `2.2` | $\text{s}^{-1}$ | Exponential relaxation rate back to cruise speed |
+
+---
+
+## 5. Underwater Optics: Perspective, Pitch Diving & Beer-Lambert Chromatic Absorption
+
+Sub-surface Koi fish must **never** cast a detached bean-shaped shadow next to their body. In a real pond water column:
+1. **Viewport Distance Perspective ($y \in [190, 338]$)**:
+   $$\text{viewportDist} = \text{clamp}\left(\frac{338.0 - y}{148.0},\, 0.0,\, 1.0\right)$$
+   - **Perspective Scale**: Distant Koi near the far bank ($y \approx 195$) render smaller; foreground Koi ($y \approx 330$) render larger:
+     $$\text{scale} = \left(1.10 - 0.62 \cdot \text{viewportDist}\right) \cdot \left(1.0 - 0.18 \cdot \text{depth}\right)$$
+   - **Grazing-Angle Foreshortening**: Near the far horizon, the camera views the pond at a shallower grazing angle ($\text{aspectY} = 0.38$); in the foreground, the camera views at a steeper top-down angle ($\text{aspectY} = 0.68$).
+2. **Pitch-Coupled Per-Segment Depth ($\text{pitch} \in [-0.45, +0.45]\text{ rad}$)**:
+   When a Koi dives downward ($\text{pitch} > 0$) or rises toward the surface ($\text{pitch} < 0$), each spine segment $i \in [0..6]$ from snout ($i=0$) to tail ($i=6$) occupies a distinct depth in the water column:
+   $$\text{segDepth}(i) = \text{clamp}\left(\text{depth} + \sin(\text{pitch}) \cdot (2.5 - i) \cdot 0.085,\, 0.05,\, 0.96\right)$$
+3. **Beer-Lambert Chromatic Shift & Dorsal Caustics**:
+   Each segment's pigment $C_{\text{pigment}}$ is attenuated directly into the deep pond water tone $C_{\text{water}} = \text{\#0b2e3a}$:
+   $$\text{submersion}(i) = \text{clamp}\left(0.74 \cdot \text{segDepth}(i) + 0.26 \cdot \text{viewportDist},\, 0.08,\, 0.92\right)$$
+   $$C_{\text{rendered}}(i) = \text{lerp}\left(C_{\text{pigment}},\, \text{\#0b2e3a},\, \text{submersion}(i)\right)$$
+   When $\text{segDepth}(i) < 0.38$, dappled overhead caustic light (`#9ef2e8` / `#fff2c2`) glints along the dorsal ridge.

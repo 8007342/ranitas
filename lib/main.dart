@@ -45,6 +45,22 @@ class _PondPageState extends State<PondPage> with WidgetsBindingObserver {
           : null,
     );
     WidgetsBinding.instance.addObserver(this);
+    HardwareKeyboard.instance.addHandler(_handleHardwareKey);
+  }
+
+  bool _handleHardwareKey(KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.space &&
+        event.logicalKey != LogicalKeyboardKey.enter) {
+      return false;
+    }
+    if (event is KeyDownEvent && !holding) {
+      holding = true;
+      game.model.press();
+    } else if (event is KeyUpEvent && holding) {
+      holding = false;
+      game.model.release();
+    }
+    return true;
   }
 
   @override
@@ -63,6 +79,7 @@ class _PondPageState extends State<PondPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     WidgetsBinding.instance.removeObserver(this);
     game.ambience.dispose();
     super.dispose();
