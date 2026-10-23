@@ -6,12 +6,13 @@
   let context, master, noise, timer;
   let disposed = false, unlocked = false, started = false, suspended = false;
   let unlockPointer = null, unlockKey = null, gestureEnded = false;
+  let unlockPending = false, unlockAttempt = 0;
   let state = { progress: 0, richness: 0, weather: 'clear', sleeping: false };
   const voices = new Set();
   const beds = [];
   const next = { cricket: 0, water: 0, frog: 0, owl: 0, thunder: 0 };
   const random = (a, b) => a + Math.random() * (b - a);
-  const active = () => context && unlocked && started && !suspended && !document.hidden && !disposed;
+  const active = () => context && unlocked && !unlockPending && started && !suspended && !document.hidden && !disposed;
 
   function smooth(param, value, seconds = 0.8) {
     const now = context.currentTime;
@@ -60,6 +61,19 @@
     return null;
   }
 
+  function unlockFailed(attempt) {
+    if (disposed || attempt !== unlockAttempt) return;
+    // Keep scene state and the context, but require another real input gesture.
+    unlockAttempt++;
+    unlocked = false;
+    unlockPending = false;
+    started = false;
+    gestureEnded = false;
+    unlockPointer = null;
+    unlockKey = null;
+    stop();
+  }
+
   // Resume inside the synchronous browser input stack, before Flutter handles it.
   function unlock(event) {
     const key = event.type === 'keydown' ? activationKey(event) : null;
@@ -67,14 +81,22 @@
     if (event.type === 'keydown' && (!key || event.repeat || event.isComposing ||
         event.altKey || event.ctrlKey || event.metaKey)) return;
     if (disposed || unlocked || document.hidden) return;
+    const attempt = ++unlockAttempt;
     try {
       if (!context && !construct()) return;
       unlockPointer = key ? null : event.pointerId;
       unlockKey = key;
-      const promise = context.resume();
-      if (promise) promise.catch(() => {});
+      gestureEnded = false;
+      unlockPending = true;
       unlocked = true;
-    } catch (_) { /* Audio is optional on unsupported browsers. */ }
+      const promise = context.resume();
+      Promise.resolve(promise).then(() => {
+        if (disposed || attempt !== unlockAttempt) return;
+        unlockPending = false;
+        if (started) sync();
+        else if (suspended || document.hidden) stop();
+      }).catch(() => unlockFailed(attempt));
+    } catch (_) { unlockFailed(attempt); }
   }
   function endGesture(event) {
     if (!unlocked) return;
@@ -183,15 +205,19 @@
   }
 
   function sync() {
+    // Do not suspend or race a resume still pending from the gesture handler.
+    if (unlockPending) return;
     if (!active()) { stop(); return; }
+    const attempt = unlockAttempt;
     context.resume().then(() => {
+      if (disposed || attempt !== unlockAttempt) return;
       if (!active()) { stop(); return; }
       smooth(master.gain, 0.32 * state.richness * (state.sleeping ? 0.7 : 1), 0.6);
       if (timer === undefined) {
         tick();
         timer = window.setInterval(tick, 250);
       }
-    }).catch(() => {});
+    }).catch(() => unlockFailed(attempt));
   }
   function visibility() { if (document.hidden) stop(); else if (started) sync(); }
   document.addEventListener('visibilitychange', visibility);

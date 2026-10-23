@@ -33,8 +33,13 @@ must be released, followed by a positive-richness update, before audio begins.
 Schedule the first game update after pointerup/keyup (or the subsequent frame);
 a pointerdown/keydown-only update intentionally stays silent. An unrelated key
 or pointer release does not complete a keyboard unlock. No automatic unlock is
-attempted. Browser autoplay policy may still block playback; a later
-update/resume retries without creating a context.
+attempted. Browser autoplay policy may still block playback. A rejected resume
+mutes and suspends the existing context and resets the unlock/release state;
+the next real pointerdown or Space/Enter keydown retries synchronously, without
+creating another context. Scene updates are retained even before unlocking.
+Updates after release while resume is pending are applied when it succeeds;
+pre-gesture updates alone still cannot start playback. After rejection, a new
+gesture release and positive-richness update are required again.
 
 Hidden tabs immediately mute, cancel the scheduler, stop transient voices, and
 suspend the context. Visibility restores only previously started, unsuspended
