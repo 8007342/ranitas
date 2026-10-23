@@ -210,12 +210,54 @@ void main() {
       weatherCounts.update(a.weather, (n) => n + 1, ifAbsent: () => 1);
       if (a.cycle == 'dusk') duskCount++;
     }
-    expect(biomes, {'willow', 'blossom', 'cypress'});
+    expect(biomes, PondModel.biomes.toSet());
     expect(weatherCounts.keys.toSet(), {'clear', 'mist', 'drizzle', 'storm'});
     expect(duskCount, inInclusiveRange(680, 820));
     expect(weatherCounts['clear']! + weatherCounts['mist']!, greaterThan(700));
     expect(weatherCounts['storm']!, lessThan(100));
   });
+
+  test(
+    'frog pose state machine transitions across launch, ascent, chomp, fall, land, and swallow',
+    () {
+      final model = PondModel(seed: 11);
+      final frog = model.frogs[0];
+      expect(frog.currentPose(), 'idle');
+      model.press();
+      model.update(.25);
+      expect(frog.currentPose(charging: model.pressing), 'charging');
+      // Place a live bug along frog 0's low jump arc so it chomps mid-flight
+      model.bugs.add(
+        BugState(
+          x: .50,
+          y: .43,
+          vx: 0,
+          vy: 0,
+          phase: 0,
+          species: 'dragonfly',
+        )..opacity = 1,
+      );
+      model.release();
+      expect(frog.airborne, isTrue);
+      expect(frog.currentPose(), 'launching');
+      final seenPoses = <String>{frog.currentPose()};
+      while (frog.airborne) {
+        model.update(1 / 60);
+        seenPoses.add(frog.currentPose());
+      }
+      expect(
+        seenPoses,
+        containsAll(['launching', 'ascending', 'chomping', 'falling']),
+      );
+      expect(frog.currentPose(), 'landing');
+      expect(frog.swallowTimer, greaterThan(0));
+      model.update(.3);
+      expect(frog.currentPose(), 'swallowing');
+      model.update(1.0);
+      expect(frog.currentPose(), 'idle');
+      expect(frog.totalCatches, 1);
+    },
+  );
 
   test(
     'both cycles preserve the final scene indefinitely with sleeping frogs',
@@ -337,4 +379,41 @@ void main() {
     model.update(0);
     expect(model.time, 0);
   });
+
+  test(
+    'jump ground-plane shadow stays on pond plane and edge landing folds pad and emits ripples',
+    () {
+      final model = PondModel(seed: 14);
+      final frog = model.frogs[0];
+      expect(frog.altitude, 0);
+      expect(model.koi.length, 4);
+      expect(model.tadpoles.length, 6);
+
+      // Launch Frog 0 toward Pad 1 (visiting perch offset lands near the pad edge)
+      model.press();
+      model.update(.35);
+      model.release();
+      expect(frog.airborne, isTrue);
+      expect(model.pads[0].landingZone, 'takeoff');
+      expect(model.ripples, isNotEmpty);
+
+      var maxAltitude = 0.0;
+      while (frog.airborne) {
+        model.update(1 / 60);
+        if (frog.airborne) {
+          expect(frog.groundY, greaterThan(frog.y));
+          maxAltitude = max(maxAltitude, frog.altitude);
+        }
+      }
+      expect(maxAltitude, greaterThan(.2));
+      expect(frog.altitude, 0);
+      expect(model.pads[1].landingZone, anyOf('edge', 'mid'));
+      expect(model.pads[1].edgeFold, greaterThan(0));
+      expect(model.ripples.length, greaterThanOrEqualTo(2));
+      expect(
+        model.koi.any((k) => k.startleTimer > 0),
+        isTrue,
+      );
+    },
+  );
 }

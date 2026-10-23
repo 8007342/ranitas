@@ -6,7 +6,10 @@ import 'game/ranitas_game.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   runApp(const RanitasApp());
 }
 
@@ -70,16 +73,10 @@ class _PondPageState extends State<PondPage> with WidgetsBindingObserver {
     body: LayoutBuilder(
       builder: (context, constraints) {
         game.renderer.reducedMotion = MediaQuery.disableAnimationsOf(context);
-        final width = (constraints.maxHeight * 257 / 457).clamp(
-          0.0,
-          constraints.maxWidth,
-        );
-        return Center(
-          child: SizedBox(
-            width: width,
-            height: width * 457 / 257,
-            child: Semantics(
-              label: 'A peaceful pond with two little frogs. Tap, hold a little, or hold longer anywhere in the pond to jump. The frogs rest when night arrives.',
+        return SizedBox.expand(
+          child: Semantics(
+              label:
+                  'A peaceful widescreen pond with two little frogs. Tap, hold a little, or hold longer anywhere in the pond to jump. The frogs rest when night arrives.',
               child: Focus(
                 autofocus: true,
                 onKeyEvent: (_, event) {
@@ -117,8 +114,7 @@ class _PondPageState extends State<PondPage> with WidgetsBindingObserver {
                       game.model.cancelPress();
                     }
                   },
-                  child: GameWidget(game: game),
-                ),
+                child: GameWidget(game: game),
               ),
             ),
           ),

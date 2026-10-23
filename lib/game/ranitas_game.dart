@@ -20,13 +20,13 @@ class RanitasGame extends FlameGame {
   Color backgroundColor() => const Color(0xff102c36);
   @override
   Future<void> onLoad() async {
-    final asset = model.biome == 'cypress'
-        ? 'pond-mist.webp'
-        : model.biome == 'blossom'
-        ? 'pond-blossom.webp'
-        : 'pond-dusk.webp';
-    renderer.backdrop = await images.load(asset);
-    foreground = await images.load('foreground-marsh.webp');
+    renderer.backdrop = await images.load(model.backdropAsset);
+    renderer.frogSheets = [
+      await images.load('frog-meadow-sheet.webp'),
+      await images.load('frog-teal-sheet.webp'),
+    ];
+    renderer.wildlifeSheet = await images.load('pond-wildlife-sheet.webp');
+    foreground = await images.load(model.foregroundAsset);
     sceneReady();
   }
 
@@ -62,7 +62,7 @@ class RanitasGame extends FlameGame {
     final layer = foreground;
     if (layer == null) return;
     final night = 1 - model.daylight;
-    final opacity = (model.richness - .12).clamp(0.0, 1.0) * .65;
+    final opacity = (model.richness - .12).clamp(0.0, 1.0) * .68;
     final sway = renderer.reducedMotion
         ? 0.0
         : math.sin(model.time * .18) * size.x * .003 * model.richness;
@@ -73,9 +73,9 @@ class RanitasGame extends FlameGame {
       Rect.fromLTWH(0, 0, layer.width.toDouble(), layer.height.toDouble()),
       Rect.fromLTWH(
         -size.x * .01 + sway,
-        size.y * .32,
+        size.y * .14,
         size.x * 1.02,
-        size.y * .68,
+        size.y * .86,
       ),
       Paint()
         ..filterQuality = FilterQuality.none

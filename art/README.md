@@ -1,36 +1,73 @@
-# Original Ranitas art
+# Original Ranitas Art & Styleguide
 
 Generated with the built-in image generation tool for this project. Source PNGs
-are retained in `art/source/`; the Flutter bundle includes only lossless WebP
+are retained in `art/source/`; the Flutter bundle includes lossless/high-res WebP
 exports from `assets/images/`. Rebuild exports with `node scripts/prepare-art.mjs`.
-All exported scenic assets are 1031 × 1543 pixels (both prime). The procedural
-animated layer uses a 257 × 457 logical canvas (also prime). Prime dimensions
+
+All exported scenic backdrops (`pond-*.webp`) and foreground parallax overlays
+(`foreground-*.webp`) are **2557 × 1439 pixels** (both prime, ~16:9 widescreen
+landscape for high-resolution large displays). Exported frog character sheets
+(`frog-*-sheet.webp`) are **1031 × 521 pixels** (both prime). The procedural
+animated layer uses a **641 × 359** logical canvas (both prime). Prime dimensions
 are an art constraint, not a guarantee of antialiasing; scaling is explicit.
 
-## Prompt set
+See [STYLEGUIDE.md](STYLEGUIDE.md) for the complete visual architecture, color
+palettes, and 10-state frog animation specification.
+
+## Scenic Backdrop Prompt Set (16:9 Widescreen Landscape)
 
 Common production direction: exquisite detailed hand-placed crisp square pixel
-art reminiscent of 1990s adventure-game scenery; portrait 1024 × 1536 source;
-open reflective pond in central and lower 60%; richly planted banks and framing
-branches; layered distant hills; jewel teal, indigo, lavender and peach;
-peaceful still atmosphere. No frogs, animals, typography, UI, buildings or
-watermarks. Frogs and wildlife are independently animated procedural layers.
+art reminiscent of 1990s adventure-game scenery; widescreen landscape source;
+open reflective pond in central and lower 60%; richly planted left/right banks
+and framing upper-corner branches; layered distant hills; jewel teal, indigo,
+lavender, amber and peach; peaceful still atmosphere. No frogs, animals,
+typography, UI, or watermarks. Frogs and wildlife are independently animated
+layers.
 
-- `pond-dusk`: quiet magical freshwater bog at blue hour; peach-pink horizon;
-  indigo mountains and distant willow trees; lavender sky with delicate clouds
-  and a single star; mossy shores, water lilies, reeds and flowers at edges.
-- `pond-mist`: cypress freshwater bayou at misty blue dawn; Spanish moss;
-  layered indigo mountains; warm pale apricot horizon; dark turquoise reeds,
-  wet rocks and water lilies; moody lavender, teal and moss palette.
-- `pond-blossom`: spring woodland pond at lavender-blue twilight; peach sunset
-  horizon; framing cherry branches covered in tiny pink blossom clusters;
-  gnarled trunks, ferny moss banks, flowers; distant flowering woodland;
-  delicate pink clouds and a star; rose-gold, teal, lavender and indigo palette.
+- `pond-dusk` (`willow` biome): quiet magical freshwater bog at blue hour;
+  peach-pink horizon; indigo mountains and distant willow trees; lavender sky
+  with delicate clouds and a single star; mossy shores, water lilies, reeds and
+  flowers at left and right edges.
+- `pond-mist` (`cypress` biome): cypress freshwater bayou at misty blue dawn;
+  Spanish moss; layered indigo mountains; warm pale apricot horizon; dark
+  turquoise reeds, wet rocks and water lilies; moody lavender, teal and moss
+  palette.
+- `pond-blossom` (`blossom` biome): spring woodland pond at lavender-blue
+  twilight; peach sunset horizon; framing cherry branches covered in tiny pink
+  blossom clusters; gnarled trunks, ferny moss banks, flowers; distant flowering
+  woodland and cliffside waterfall; rose-gold, teal, lavender and indigo palette.
+- `pond-maple` (`maple` biome): autumn Japanese maple pond at warm amber-violet
+  dusk; overarching crimson and gold momiji branches in upper corners; distant
+  vermilion wooden bridge in cedar mist; mossy stepping stones and floating
+  maple leaves at outer shores.
+- `pond-sanctuary` (`sanctuary` biome): tranquil bamboo and stone-lantern
+  sanctuary pond at twilight; mossy stone *tōrō* lantern with warm amber glow on
+  the left bank; emerald bamboo stalks and leaves framing upper corners; distant
+  pagoda silhouette against indigo hills; lotus buds and river stones.
+- `pond-grotto` (`grotto` biome): enchanted limestone ravine grotto opening to a
+  starry twilight sky through a natural rock arch; hanging vines, ferns, and
+  glowing cyan, violet, and amber bioluminescent mushrooms along rocky banks;
+  glass-clear deep indigo-teal pond.
+- `pond-alpine` (`alpine` biome): high-mountain glacial meadow tarn at alpenglow
+  twilight; framing pine and golden larch boughs; granite boulders, cushion
+  moss, and alpine lupines and edelweiss on outer shores; snow-dusted peaks
+  reflecting in turquoise water.
 
-Foreground vegetation, frogs, insects, reflections, rain, stars, koi, and
-sleeping marks are authored in Dart and composed separately at runtime.
+## Foreground Parallax Overlays (16:9 Transparent Alpha)
+
 - `foreground-marsh`: genuine transparent foreground overlay; cattails, mossy
   stones, ferns, cream/mauve flowers and two pink lotus blooms around lower
-  corners with an open center. Upper canvas empty alpha; no scene backdrop.
-  Common pixel-art direction above; generated with built-in image generation.
-  Composed separately, revealed gradually, and shifted gently for parallax.
+  left and right corners with an open widescreen center.
+- `foreground-blossom`: genuine transparent foreground overlay; mossy garden
+  rocks, iris blades, Japanese ferns, fallen blossom/maple petals, and blooming
+  pink/gold water lilies at lower corners.
+- `foreground-grotto`: genuine transparent foreground overlay; wet mossy
+  limestone rocks, curling fern fronds, glowing cyan/violet bioluminescent
+  mushroom clusters, and luminous teal lotus pads at lower corners.
+
+## Hero Frog Character Sheets (Hybrid Sprite Atlas + Pixel-Matrix Animation)
+
+- `frog-meadow-sheet`: Frog 0 (Player frog) 4×2 pose sheet — emerald-meadow tree
+  frog with lime-gold highlights, cream belly, coral toe pads, and golden eyes.
+- `frog-teal-sheet`: Frog 1 (Companion JEV frog) 4×2 pose sheet — jewel
+  turquoise-teal pond frog with seafoam stripes, honey belly, and amber eyes.

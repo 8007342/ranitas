@@ -163,7 +163,7 @@ Insects SHALL use correlated angular drift, smoothly relaxed velocities and soft
 
 ### Requirement: Coherent seeded biomes and weather with distant thunder
 
-The scene SHALL choose willow, blossom or cypress with equal seeded probability and coherent palette/vegetation. Persistent weather SHALL be clear 50%, mist 30%, drizzle 15% or storm 5%. Gusts SHALL vary wind without replacing that weather. Storm SHALL permit quiet distant thunder, expressly without lightning flashes. Artful weather/species rules SHALL NOT be presented as biological validation.
+The scene SHALL choose `willow`, `blossom`, `cypress`, `maple`, `sanctuary`, `grotto`, or `alpine` with equal seeded probability and coherent palette/vegetation. Persistent weather SHALL be clear 50%, mist 30%, drizzle 15% or storm 5%. Gusts SHALL vary wind without replacing that weather. Storm SHALL permit quiet distant thunder, expressly without lightning flashes. Artful weather/species rules SHALL NOT be presented as biological validation.
 
 #### Scenario: Seeded scene selection
 

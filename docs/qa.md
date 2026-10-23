@@ -8,7 +8,7 @@ Additional reproducible cases cover 60 seconds before any input for 100 seeds, c
 
 ## Results
 
-The final full `flutter test` run passes all 22 tests; `flutter analyze` reports no issues.
+The final full `flutter test` run passes all 23 tests; `flutter analyze` reports no issues.
 
 On 2026-10-23, `flutter test test/pond_soak_test.dart` passed all five tests in approximately 50 seconds. All eight weather/cycle combinations occurred. Measured maxima for the entire retained bug list were 18 awake and 18 asleep; per-weather maxima were clear 18, mist 18, drizzle 10 and storm 5. Every sampled session slept by 366 seconds, and every 30-minute post-sleep simulation preserved sleep, frog positions, elapsed session time and endpoint lighting despite repeated input. No nonfinite coordinates or unbounded bug-list growth were observed. `flutter analyze test/pond_soak_test.dart` reported no issues. A direct local `dart analyze` could not resolve Flutter test packages because this forge runs Flutter in its shared toolchain image; the successful Flutter analysis is the relevant result.
 

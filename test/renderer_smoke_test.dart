@@ -6,51 +6,79 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ranitas/game/pond_model.dart';
 import 'package:ranitas/game/pond_renderer.dart';
 
+Future<ui.Image> _loadAssetImage(String relativePath) async {
+  final bytes = await rootBundle.load(relativePath);
+  final codec = await ui.instantiateImageCodec(bytes.buffer.asUint8List());
+  final frame = await codec.getNextFrame();
+  codec.dispose();
+  return frame.image;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'all world layers render before play and after permanent sleep',
+    'all widescreen world biomes and frog sprite sheets render across lifecycle and poses',
     () async {
       final out = Directory('build/scene-checks')..createSync(recursive: true);
-      for (final seed in [7, 18, 42]) {
-        final model = PondModel(seed: seed, durationOverride: 10);
-        final asset = model.biome == 'cypress'
-            ? 'pond-mist'
-            : model.biome == 'blossom'
-            ? 'pond-blossom'
-            : 'pond-dusk';
-        final bytes = await rootBundle.load('assets/images/$asset.webp');
-        final codec = await ui.instantiateImageCodec(
-          bytes.buffer.asUint8List(),
+      final meadowSheet = await _loadAssetImage(
+        'assets/images/frog-meadow-sheet.webp',
+      );
+      final tealSheet = await _loadAssetImage(
+        'assets/images/frog-teal-sheet.webp',
+      );
+      expect(meadowSheet.width, 1031);
+      expect(meadowSheet.height, 521);
+      expect(tealSheet.width, 1031);
+      expect(tealSheet.height, 521);
+
+      final seenBiomes = <String>{};
+      for (var seed = 0; seenBiomes.length < PondModel.biomes.length && seed < 100; seed++) {
+        final probe = PondModel(seed: seed, durationOverride: 10);
+        if (!seenBiomes.add(probe.biome)) continue;
+
+        final backdrop = await _loadAssetImage(
+          'assets/images/${probe.backdropAsset}',
         );
-        final frame = await codec.getNextFrame();
-        final renderer = PondRenderer()..backdrop = frame.image;
+        expect(backdrop.width, 2557);
+        expect(backdrop.height, 1439);
+
+        final renderer = PondRenderer()
+          ..backdrop = backdrop
+          ..frogSheets = [meadowSheet, tealSheet];
+
         for (final stage in ['still', 'alive', 'sleep']) {
           if (stage == 'alive') {
-            model.press();
-            model.release();
-            model.update(5);
+            probe.press();
+            probe.release();
+            probe.update(5);
           }
           if (stage == 'sleep') {
-            model.update(20);
-            expect(model.sleeping, isTrue);
+            probe.update(20);
+            expect(probe.sleeping, isTrue);
           }
           final recorder = ui.PictureRecorder();
-          renderer.render(ui.Canvas(recorder), const ui.Size(514, 914), model);
+          renderer.render(
+            ui.Canvas(recorder),
+            const ui.Size(1282, 718),
+            probe,
+          );
           final picture = recorder.endRecording();
-          final image = await picture.toImage(514, 914);
+          final image = await picture.toImage(1282, 718);
           final png = await image.toByteData(format: ui.ImageByteFormat.png);
           expect(png, isNotNull);
-          expect(png!.lengthInBytes, greaterThan(10000));
-          File('${out.path}/$seed-$stage.png')
-              .writeAsBytesSync(png.buffer.asUint8List());
+          expect(png!.lengthInBytes, greaterThan(20000));
+          File('${out.path}/${probe.biome}-$stage.png').writeAsBytesSync(
+            png.buffer.asUint8List(),
+          );
           image.dispose();
           picture.dispose();
         }
         renderer.dispose();
-        frame.image.dispose();
-        codec.dispose();
+        backdrop.dispose();
       }
+      expect(seenBiomes, PondModel.biomes.toSet());
+      meadowSheet.dispose();
+      tealSheet.dispose();
     },
   );
 }

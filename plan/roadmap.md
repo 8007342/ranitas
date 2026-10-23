@@ -4,7 +4,7 @@
 - [x] Initialize OpenSpec and Flutter + Flame for web, Android, and iOS.
 - [x] Integrate coherent seeded scenes, generated prime-sized art, frogs, wildlife, and original browser ambience.
 - [x] Train and validate a tiny local action prior; keep geometric timing and safety authoritative.
-- [x] Validate portrait browser views, touch audio, deployment asset limits, and 22 automated tests.
+- [x] Validate landscape browser views, 7 widescreen biome motifs, 10-state hybrid frog animations, touch audio, deployment asset limits, and 23 automated tests.
 - [x] Verify 100 seeded worlds and 30 minutes of permanent sleep ambience in model simulation.
 - [x] Push game milestones and prepare the tested game for main.
 
