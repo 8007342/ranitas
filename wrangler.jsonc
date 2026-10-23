@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ranitas",
+  "compatibility_date": "2026-10-23",
+  "assets": {"directory": "./build/web", "not_found_handling": "single-page-application"},
+  "routes": [{"pattern": "ranitas.tlatoani.net", "custom_domain": true}]
+}

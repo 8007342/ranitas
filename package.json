@@ -1,0 +1,1 @@
+{"name":"ranitas","private":true,"version":"0.1.0","scripts":{"build":"node scripts/build.mjs","deploy":"npm run build && wrangler deploy","deploy:pages":"npm run build && wrangler pages deploy build/web --project-name ranitas","check:assets":"node scripts/check-assets.mjs"},"devDependencies":{"wrangler":"^4.0.0"}}

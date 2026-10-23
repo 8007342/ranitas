@@ -1,0 +1,7 @@
+.forge-startup-context.md
+node_modules/
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+.wrangler/
+.env
