@@ -19,34 +19,6 @@ class PondModel {
     }
     _durationOverride = durationOverride;
     duration = durationOverride ?? 240;
-    frogs = [FrogState(0, .27, .69), FrogState(1, .73, .72)];
-    pads = [
-      PadState(index: 0, x: .27, y: .69, radiusX: 36, radiusY: 11),
-      PadState(index: 1, x: .73, y: .72, radiusX: 38, radiusY: 12),
-    ];
-    _fxRandom = Random(sceneSeed ^ 0x5f3759df);
-    koi = List.generate(4, (i) {
-      final startX = 135.0 + i * 115.0 + (_fxRandom.nextDouble() - .5) * 30.0;
-      final startY = 232.0 + (i % 2) * 44.0 + (_fxRandom.nextDouble() - .5) * 18.0;
-      return KoiState(
-        index: i,
-        variant: i,
-        x: startX,
-        y: startY,
-        heading: i.isEven ? 0.12 : pi - 0.12,
-        swimPhase: i * 1.57,
-        depth: 0.25 + (i % 3) * 0.18,
-      );
-    });
-    tadpoles = List.generate(6, (i) {
-      return TadpoleState(
-        index: i,
-        x: 120.0 + i * 76.0 + (_fxRandom.nextDouble() - .5) * 24.0,
-        y: 215.0 + (i % 3) * 36.0,
-        heading: _fxRandom.nextDouble() * pi * 2,
-        swimPhase: i * 1.1,
-      );
-    });
     biome = biomes[random.nextInt(biomes.length)];
     final weatherRoll = random.nextDouble();
     weather = weatherRoll < .5
@@ -58,6 +30,74 @@ class PondModel {
         : 'storm';
     cycle = random.nextDouble() < .75 ? 'dusk' : 'dawn';
     period = cycle == 'dawn' ? 'night' : 'day';
+
+    // Biome-specific open-water basin so hero pads, ambient floating leaves,
+    // Koi fish, and rain impacts always rest on water and never on shore rocks.
+    basin = WaterBasin.forBiome(biome);
+    frogs = [
+      FrogState(0, basin.pad0X, basin.pad0Y),
+      FrogState(1, basin.pad1X, basin.pad1Y),
+    ];
+    pads = [
+      PadState(
+        index: 0,
+        x: basin.pad0X,
+        y: basin.pad0Y,
+        radiusX: 35,
+        radiusY: 11,
+      ),
+      PadState(
+        index: 1,
+        x: basin.pad1X,
+        y: basin.pad1Y,
+        radiusX: 37,
+        radiusY: 12,
+      ),
+    ];
+
+    _fxRandom = Random(sceneSeed ^ 0x5f3759df);
+    ambientPads = _generateAmbientPads();
+    koi = List.generate(4, (i) {
+      final y =
+          basin.topY +
+          18.0 +
+          ((i + .4) / 4.2) * (basin.bottomY - basin.topY - 32.0);
+      final left = basin.leftX(y) + 28.0;
+      final right = basin.rightX(y) - 28.0;
+      final startX =
+          left + ((i + .5) / 4.0) * max(20.0, right - left) +
+          (_fxRandom.nextDouble() - .5) * 18.0;
+      return KoiState(
+        index: i,
+        variant: i,
+        x: startX.clamp(left, right),
+        y: y,
+        heading: i.isEven ? 0.12 : pi - 0.12,
+        swimPhase: i * 1.57,
+        depth: 0.25 + (i % 3) * 0.18,
+      );
+    });
+    tadpoles = List.generate(6, (i) {
+      final y =
+          basin.topY +
+          14.0 +
+          ((i + .3) / 6.2) * (basin.bottomY - basin.topY - 24.0);
+      final left = basin.leftX(y) + 20.0;
+      final right = basin.rightX(y) - 20.0;
+      return TadpoleState(
+        index: i,
+        x: (left + _fxRandom.nextDouble() * max(20.0, right - left)).clamp(
+          left,
+          right,
+        ),
+        y: y,
+        heading: _fxRandom.nextDouble() * pi * 2,
+        swimPhase: i * 1.1,
+      );
+    });
+    if (weather == 'drizzle' || weather == 'storm') {
+      _updateRain(0.35);
+    }
   }
 
   static const List<String> biomes = [
@@ -68,6 +108,11 @@ class PondModel {
     'sanctuary',
     'grotto',
     'alpine',
+    'lotus',
+    'firefly',
+    'autumn_mist',
+    'jade_sanctuary',
+    'crystal_grotto',
   ];
 
   final Random random;
@@ -84,6 +129,7 @@ class PondModel {
   bool started = false;
   bool sleeping = false;
   late String biome;
+  late final WaterBasin basin;
 
   /// Scenic landscape WebP filename matching [biome].
   String get backdropAsset => switch (biome) {
@@ -93,13 +139,23 @@ class PondModel {
     'sanctuary' => 'pond-sanctuary.webp',
     'grotto' => 'pond-grotto.webp',
     'alpine' => 'pond-alpine.webp',
+    'lotus' => 'pond-lotus.webp',
+    'firefly' => 'pond-firefly.webp',
+    'autumn_mist' => 'pond-autumn-mist.webp',
+    'jade_sanctuary' => 'pond-jade-sanctuary.webp',
+    'crystal_grotto' => 'pond-crystal-grotto.webp',
     _ => 'pond-dusk.webp',
   };
 
   /// Transparent foreground parallax WebP filename matching [biome].
   String get foregroundAsset => switch (biome) {
-    'blossom' || 'maple' || 'sanctuary' => 'foreground-blossom.webp',
-    'grotto' => 'foreground-grotto.webp',
+    'blossom' ||
+    'maple' ||
+    'sanctuary' ||
+    'lotus' ||
+    'autumn_mist' ||
+    'jade_sanctuary' => 'foreground-blossom.webp',
+    'grotto' || 'crystal_grotto' => 'foreground-grotto.webp',
     _ => 'foreground-marsh.webp',
   };
 
@@ -110,8 +166,6 @@ class PondModel {
   late final String cycle;
   late String period;
 
-  /// Renderer palette interpolation: dawn dark blue -> golden sunrise,
-  /// dusk warm daylight -> blue night. Continues to hold its endpoint asleep.
   /// A rare smooth underwater disturbance; the pads visibly wobble first.
   double get leafNudge => started && !sleeping && !_settling && progress > .45
       ? pow(max(0.0, sin(time * .071 + sceneSeed % 37)), 40).toDouble()
@@ -120,12 +174,65 @@ class PondModel {
   double get daylight => cycle == 'dawn' ? progress : 1 - progress;
   late final List<FrogState> frogs;
   late final List<PadState> pads;
+  late final List<PadState> ambientPads;
   late final List<KoiState> koi;
   late final List<TadpoleState> tadpoles;
   final List<RippleState> ripples = [];
   final List<SplashDroplet> splashDroplets = [];
+  final List<RaindropState> raindrops = [];
   late final Random _fxRandom;
   final List<BugState> bugs = [];
+
+  List<PadState> _generateAmbientPads() {
+    final result = <PadState>[];
+    final hero0X = basin.pad0X * 641;
+    final hero0Y = basin.pad0Y * 359;
+    final hero1X = basin.pad1X * 641;
+    final hero1Y = basin.pad1Y * 359;
+
+    for (var i = 0; i < 7; i++) {
+      var placed = false;
+      for (var attempt = 0; attempt < 24 && !placed; attempt++) {
+        final yn = .12 + _fxRandom.nextDouble() * .80;
+        final py = basin.topY + yn * (basin.bottomY - basin.topY);
+        final left = basin.leftX(py) + 22;
+        final right = basin.rightX(py) - 22;
+        if (right <= left) continue;
+        final px = left + _fxRandom.nextDouble() * (right - left);
+
+        // Keep ambient leaves clear of the two primary frog lily pads
+        final d0 = sqrt(pow(px - hero0X, 2) + pow((py - hero0Y) * 1.8, 2));
+        final d1 = sqrt(pow(px - hero1X, 2) + pow((py - hero1Y) * 1.8, 2));
+        if (d0 < 52 || d1 < 52) continue;
+
+        final tooClose = result.any((other) {
+          final ox = other.x * 641;
+          final oy = other.y * 359;
+          return sqrt(pow(px - ox, 2) + pow((py - oy) * 1.8, 2)) < 28;
+        });
+        if (tooClose) continue;
+
+        final perspective = .56 + .48 * yn;
+        final rx = (9.5 + _fxRandom.nextDouble() * 11.5) * perspective;
+        final ry = rx * (.28 + .07 * yn);
+        result.add(
+          PadState(
+            index: 2 + i,
+            x: px / 641,
+            y: py / 359,
+            radiusX: rx,
+            radiusY: ry,
+            isAmbient: true,
+            hasLotus: i % 3 == 0,
+            phase: _fxRandom.nextDouble() * pi * 2,
+          ),
+        );
+        placed = true;
+      }
+    }
+    result.sort((a, b) => a.y.compareTo(b.y));
+    return result;
+  }
 
   /// Normal sessions adapt within 180–360 seconds; overrides are for previews
   /// and tests. Progress never runs backwards when the duration adapts.
@@ -137,7 +244,7 @@ class PondModel {
   int aiEvaluations = 0;
   double? _durationOverride;
   double? _pressStarted;
-  bool _launchedFromPress = false;
+  bool _autoLaunched = false;
   double _remainder = 0;
   double _aiClock = 0;
   double _spawnClock = 0;
@@ -148,46 +255,46 @@ class PondModel {
   double _lastRelease = -100;
   bool _settling = false;
   static const double _step = 1 / 60;
-  static const double _launchDelay = .06;
+
+  /// Valve GameFlow-tuned single-impulse thresholds:
+  /// - Release < 0.11s -> immediate 'tap' hop
+  /// - Release 0.11s .. < 0.26s -> immediate 'low' (short) jump
+  /// - Hold >= 0.26s -> automatic liftoff into 'high' (long) jump without
+  ///   waiting for release, flying along a single unbroken parabola (zero double-jump).
+  static const double _tapThreshold = .11;
+  static const double _highAutoLaunchThreshold = .26;
 
   /// Repeated down events or presses while a frog is in flight are ignored.
   void press() {
     if (sleeping || _settling || pressing || _busy) return;
     _pressStarted = time + _remainder;
-    _launchedFromPress = false;
+    _autoLaunched = false;
+    // Tactile pad press-down feedback while coiling
+    pads[frogs[0].leafIndex].dipVelocity += 4.5;
   }
 
-  /// Immediate lift (< .18s) -> 'tap'; lift during jump (.18s..<.52s) -> 'low';
-  /// hold past jump (>= .52s) -> 'high'.
+  /// Releases before 0.11s launch 'tap'; before 0.26s launch 'low';
+  /// holds >= 0.26s already auto-launched 'high' on the pad.
   void release() {
     if (!pressing) return;
     final held = holdDuration;
-    final launched = _launchedFromPress;
+    final alreadyLaunched = _autoLaunched;
     _pressStarted = null;
-    _launchedFromPress = false;
+    _autoLaunched = false;
     if (sleeping || _settling) return;
-    started = true;
     if (time - _lastRelease < .3) _tapAgitation = min(1, _tapAgitation + .2);
     _lastRelease = time;
-    final action = held < .18 - 1e-9
-        ? 'tap'
-        : held < .52 - 1e-9
-        ? 'low'
-        : 'high';
-    if (!launched) {
-      if (!_busy) {
-        engagement = min(1, engagement + .075);
-        _launch(frogs[0], action);
-      }
-    } else if (frogs[0].airborne) {
-      _sustainJump(frogs[0], action);
-    }
+    if (alreadyLaunched || _busy) return;
+    started = true;
+    engagement = min(1, engagement + .075);
+    final action = held < _tapThreshold - 1e-9 ? 'tap' : 'low';
+    _launch(frogs[0], action);
   }
 
-  /// Pointer cancellation before takeoff never starts play or launches a frog.
+  /// Pointer cancellation before auto-launch never starts play or launches a frog.
   void cancelPress() {
     _pressStarted = null;
-    _launchedFromPress = false;
+    _autoLaunched = false;
   }
 
   /// Fixed substeps keep flight, bug motion and AI independent of frame rate.
@@ -233,7 +340,7 @@ class PondModel {
               ? 'dusk'
               : 'night');
     _tapAgitation *= exp(-dt / 3);
-    _updateHoldJump();
+    _updateAutoLaunch();
     _updateWind(dt);
     _updateBugs(dt);
     for (final frog in frogs) {
@@ -241,6 +348,7 @@ class PondModel {
     }
     _updatePads(dt);
     _updateRipplesAndSplashes(dt);
+    _updateRain(dt);
     _updateWildlife(dt);
     if (!started || sleeping) return;
     if (_settling) {
@@ -271,34 +379,18 @@ class PondModel {
 
   bool get _busy => frogs.any((f) => f.airborne || f.swimming);
 
-  void _updateHoldJump() {
-    if (!pressing || sleeping || _settling) return;
-    final held = holdDuration;
-    if (!_launchedFromPress && held >= _launchDelay - 1e-9) {
-      if (_busy) {
-        cancelPress();
-        return;
-      }
+  void _updateAutoLaunch() {
+    if (!pressing || _autoLaunched || sleeping || _settling) return;
+    if (_busy) {
+      cancelPress();
+      return;
+    }
+    if (holdDuration >= _highAutoLaunchThreshold - 1e-9) {
       started = true;
-      _launchedFromPress = true;
+      _autoLaunched = true;
       engagement = min(1, engagement + .075);
-      _launch(frogs[0], 'tap');
+      _launch(frogs[0], 'high');
     }
-    if (_launchedFromPress && frogs[0].airborne) {
-      if (held >= .52 - 1e-9 && frogs[0].action != 'high') {
-        _sustainJump(frogs[0], 'high');
-      } else if (held >= .18 - 1e-9 && frogs[0].action == 'tap') {
-        _sustainJump(frogs[0], 'low');
-      }
-    }
-  }
-
-  void _sustainJump(FrogState frog, String newAction) {
-    const rank = {'tap': 0, 'low': 1, 'high': 2};
-    if ((rank[newAction] ?? 0) <= (rank[frog.action] ?? 0)) return;
-    frog.action = newAction;
-    frog._duration = _flightDuration(newAction);
-    frog.jumpPhase = (frog._flightElapsed / frog._duration).clamp(0.0, .98);
   }
 
   static double _flightDuration(String action) => action == 'tap'
@@ -311,8 +403,8 @@ class PondModel {
       : action == 'low'
       ? .25
       : .39;
-  static double _leafX(int leaf) => leaf == 0 ? .27 : .73;
-  static double _leafY(int leaf) => leaf == 0 ? .69 : .72;
+  double _leafX(int leaf) => pads[leaf].x;
+  double _leafY(int leaf) => pads[leaf].y;
 
   // Each frog has a small perch offset when visiting the other's leaf. Flights
   // are serialized; the vertical lane additionally separates passing silhouettes.
@@ -343,8 +435,6 @@ class PondModel {
     frog._toX += cos(angle) * radius * sign;
     frog._toY += sin(angle) * radius * ySign;
     frog._duration = _flightDuration(action);
-    frog._flightElapsed = 0;
-    frog._arcHeight = _height(action);
     frog._returning = returning;
     frog.jumpPhase = 0;
     frog.airborne = true;
@@ -366,7 +456,7 @@ class PondModel {
     sourcePad.dewdropVelocity += 14.0 * launchImpulse;
     sourcePad.landingZone = 'takeoff';
     _emitRipple(
-      x: sourcePad.x * 641,
+      x: sourcePad.x * 641 + sourcePad.driftX,
       y: sourcePad.y * 359 + 2,
       initialRadius: sourcePad.radiusX * .55,
       maxRadius: sourcePad.radiusX * 1.65,
@@ -398,16 +488,14 @@ class PondModel {
       return;
     }
     if (!frog.airborne) return;
-    frog._flightElapsed += dt;
-    frog.jumpPhase = min(1, frog._flightElapsed / frog._duration);
-    frog._arcHeight +=
-        (_height(frog.action) - frog._arcHeight) * (1 - exp(-dt * 18));
+    // Pure, single-impulse ballistic parabola from liftoff (p=0) to landing (p=1)
+    frog.jumpPhase = min(1, frog.jumpPhase + dt / frog._duration);
     final p = frog.jumpPhase;
     frog.x = frog._fromX + (frog._toX - frog._fromX) * p;
     frog.y =
         frog._fromY +
         (frog._toY - frog._fromY) * p -
-        sin(pi * p) * (frog._arcHeight + frog.index * .018);
+        sin(pi * p) * (_height(frog.action) + frog.index * .018);
     if (!_settling && p > .12 && p < .88) {
       for (final bug in bugs) {
         if (!bug.alive || bug.opacity < .25) continue;
@@ -434,12 +522,15 @@ class PondModel {
         frog.swimming = true;
         frog.bellyFlop = 1;
         frog._swimAge = 0;
-        var splashX = (frog._toX + wind * .04).clamp(.05, .95);
+        var splashX = (frog._toX + wind * .04).clamp(
+          basin.leftX(frog._toY * 359) / 641 + .03,
+          basin.rightX(frog._toY * 359) / 641 - .03,
+        );
         final other = frogs[1 - frog.index];
         if ((splashX - other.x).abs() < .045) {
           splashX = other.x + (frog._toX <= other.x ? -.048 : .048);
         }
-        frog._splashX = splashX.clamp(.05, .95);
+        frog._splashX = splashX.clamp(.12, .88);
         frog.x = frog._splashX;
         frog.y = frog._toY + .065;
         frog.facing = frog._toX >= frog._splashX ? 1.0 : -1.0;
@@ -495,7 +586,7 @@ class PondModel {
     final offsetMag = sqrt(offsetX * offsetX + offsetY * offsetY * .25);
     frog.lastImpactOffset = offsetX;
     final signX = offsetX >= 0 ? 1.0 : -1.0;
-    final padPxX = pad.x * 641;
+    final padPxX = pad.x * 641 + pad.driftX;
     final padPxY = pad.y * 359 + 2;
 
     if (offsetMag >= .58) {
@@ -572,9 +663,6 @@ class PondModel {
   }
 
   /// JEV combines geometric lookahead with a synthetic-teacher-trained prior.
-  /// At 4 Hz, eligible decisions project bugs through three candidate arcs;
-  /// one prior suggestion gives only a small tie-break bonus. Teacher imitation
-  /// does not establish gameplay efficacy. Timing and safety stay geometric.
   void _evaluateJev() {
     aiEvaluations++;
     final frog = frogs[1];
@@ -722,8 +810,6 @@ class PondModel {
     for (final bug in bugs) {
       bug.phase =
           (bug.phase + dt * (bug.species == 'mosquito' ? 13 : 5)) % (pi * 2);
-      // Correlated angular noise, smooth velocity relaxation, and soft edge
-      // steering produce meanders instead of independent positional jitter.
       bug._turn =
           bug._turn * exp(-dt * 2) +
           (random.nextDouble() - .5) * sqrt(dt) * 1.8;
@@ -773,7 +859,8 @@ class PondModel {
     required double intensity,
     double biasX = 0,
   }) {
-    if (ripples.length >= 28) ripples.removeAt(0);
+    if (!basin.contains(x, y, margin: 6)) return;
+    if (ripples.length >= 34) ripples.removeAt(0);
     ripples.add(
       RippleState(
         x: x,
@@ -795,39 +882,106 @@ class PondModel {
     required double power,
   }) {
     for (var i = 0; i < count; i++) {
-      if (splashDroplets.length >= 36) splashDroplets.removeAt(0);
+      if (splashDroplets.length >= 42) splashDroplets.removeAt(0);
       final spread = side == 0
-          ? (i.isEven ? 1.0 : -1.0) * (18 + _fxRandom.nextDouble() * 34)
-          : side * (22 + _fxRandom.nextDouble() * 34);
-      final vy = -(26 + _fxRandom.nextDouble() * 32) * power;
+          ? (i.isEven ? 1.0 : -1.0) * (16 + _fxRandom.nextDouble() * 32)
+          : side * (20 + _fxRandom.nextDouble() * 34);
+      final vy = -(24 + _fxRandom.nextDouble() * 30) * power;
       splashDroplets.add(
         SplashDroplet(
           x: x + (_fxRandom.nextDouble() - .5) * 4,
           y: y - 1,
           vx: spread * power,
           vy: vy,
-          maxAge: .32 + _fxRandom.nextDouble() * .18,
+          maxAge: .30 + _fxRandom.nextDouble() * .18,
         ),
       );
     }
   }
 
   void _updatePads(double dt) {
-    for (final pad in pads) {
-      // Vertical hydrostatic spring: y'' = -145 y - 15.5 y'
+    final allPads = [...pads, ...ambientPads];
+    for (final pad in allPads) {
+      final padPxX = pad.x * 641 + pad.driftX;
+      final padPxY = pad.y * 359 + pad.floatY;
+
+      // 1. Wave Tripling: Expanding surface ripples rock & nudge lily pads as the wave crest passes
+      for (final r in ripples) {
+        final dx = padPxX - (r.x + r.biasX * r.progress);
+        final dy = (padPxY - r.y) / .34;
+        final dist = sqrt(dx * dx + dy * dy);
+        final crestDelta = dist - r.currentRadius;
+        if (crestDelta.abs() < 9.5 && dist > 3.0) {
+          final waveStrength =
+              r.intensity * (1.0 - r.progress) * (pad.isAmbient ? 1.35 : .75);
+          pad.dipVelocity += sin(crestDelta * .45) * 16.0 * waveStrength * dt;
+          pad.tiltVelocity +=
+              (dx >= 0 ? 1.0 : -1.0) * 9.5 * waveStrength * dt;
+          pad.driftVelocity += (dx / dist) * 14.0 * waveStrength * dt;
+          if (pad.isAmbient) {
+            pad.floatVelocity += (dy / dist) * 4.5 * waveStrength * dt;
+          }
+        }
+      }
+
+      // 2. Subsurface Fish Wake: Koi swimming near/under a pad nudge and tilt it
+      for (final k in koi) {
+        if (k.depth > .68) continue;
+        final dx = padPxX - k.x;
+        final dy = (padPxY - k.y) * 1.8;
+        final dist = sqrt(dx * dx + dy * dy);
+        if (dist < pad.radiusX + 18.0) {
+          final wake =
+              ((pad.radiusX + 18.0 - dist) / (pad.radiusX + 18.0)) *
+              (1.0 - k.depth) *
+              (pad.isAmbient ? 1.4 : .7);
+          pad.driftVelocity += cos(k.heading) * 18.0 * wake * dt;
+          if (pad.isAmbient) {
+            pad.floatVelocity += sin(k.heading) * 6.5 * wake * dt;
+          }
+          pad.tiltVelocity += cos(k.heading) * 7.5 * wake * dt;
+          pad.dipVelocity += 6.0 * wake * dt;
+        }
+      }
+
+      // 3. Ambient Pond Current Drift for floating leaves
+      if (pad.isAmbient) {
+        pad.driftVelocity +=
+            (sin(time * .38 + pad.phase) * 3.8 + wind * 5.0) * dt;
+        pad.floatVelocity += cos(time * .31 + pad.phase) * 1.8 * dt;
+      }
+
+      // 4. Damped Harmonic Springs
       final ay = -145.0 * pad.dipY - 15.5 * pad.dipVelocity;
       pad.dipVelocity += ay * dt;
       pad.dipY = (pad.dipY + pad.dipVelocity * dt).clamp(-4.5, 6.5);
 
-      // Pitch/roll spring: theta'' = -190 theta - 18 theta'
       final aTilt = -190.0 * pad.tiltAngle - 18.0 * pad.tiltVelocity;
       pad.tiltVelocity += aTilt * dt;
       pad.tiltAngle = (pad.tiltAngle + pad.tiltVelocity * dt).clamp(-.38, .38);
 
-      // Lateral drift spring: x'' = -65 x - 12 x'
-      final ax = -65.0 * pad.driftX - 12.0 * pad.driftVelocity;
+      final maxDrift = pad.isAmbient ? 9.5 : 5.0;
+      final kDrift = pad.isAmbient ? 24.0 : 65.0;
+      final cDrift = pad.isAmbient ? 6.5 : 12.0;
+      final ax = -kDrift * pad.driftX - cDrift * pad.driftVelocity;
       pad.driftVelocity += ax * dt;
-      pad.driftX = (pad.driftX + pad.driftVelocity * dt).clamp(-5.0, 5.0);
+      pad.driftX = (pad.driftX + pad.driftVelocity * dt).clamp(
+        -maxDrift,
+        maxDrift,
+      );
+
+      final aFloat = -28.0 * pad.floatY - 7.5 * pad.floatVelocity;
+      pad.floatVelocity += aFloat * dt;
+      pad.floatY = (pad.floatY + pad.floatVelocity * dt).clamp(-4.0, 4.0);
+
+      // Clamp ambient pad within water basin bounds
+      if (pad.isAmbient) {
+        final minX = basin.leftX(padPxY) + pad.radiusX + 4;
+        final maxX = basin.rightX(padPxY) - pad.radiusX - 4;
+        final worldX = pad.x * 641 + pad.driftX;
+        if (worldX < minX) pad.driftX = minX - pad.x * 641;
+        if (worldX > maxX) pad.driftX = maxX - pad.x * 641;
+      }
 
       // Dewdrop bead oscillation
       final aDrop =
@@ -838,7 +992,7 @@ class PondModel {
         3.5,
       );
 
-      // Edge fold uncurls smoothly over ~0.65s
+      // Edge fold uncurls smoothly
       pad.edgeFold *= exp(-dt / .18);
       if (pad.edgeFold < .01) pad.edgeFold = 0;
       pad.waterWashAlpha = (pad.edgeFold * .72).clamp(0.0, 1.0);
@@ -855,22 +1009,105 @@ class PondModel {
       d.age += dt;
       d.x += d.vx * dt;
       d.y += d.vy * dt;
-      d.vy += 195.0 * dt; // Gravity
+      d.vy += 195.0 * dt;
     }
     splashDroplets.removeWhere((d) => d.age >= d.maxAge);
+  }
 
-    // Subtle rain surface ripples during drizzle/storm
-    if ((weather == 'drizzle' || weather == 'storm') &&
-        ripples.length < 18 &&
-        _fxRandom.nextDouble() < (weather == 'storm' ? .28 : .12)) {
-      _emitRipple(
-        x: 70 + _fxRandom.nextDouble() * 500,
-        y: 195 + _fxRandom.nextDouble() * 140,
-        initialRadius: 1.5,
-        maxRadius: 14 + _fxRandom.nextDouble() * 10,
-        duration: .75,
-        intensity: .32,
+  void _updateRain(double dt) {
+    final isRaining = weather == 'drizzle' || weather == 'storm';
+    if (!isRaining) {
+      raindrops.clear();
+      return;
+    }
+    final targetCount = weather == 'storm' ? 42 : 20;
+    final spawnRate = weather == 'storm' ? 110.0 : 48.0;
+    final toSpawn = (spawnRate * dt + (_fxRandom.nextDouble() < .4 ? 1 : 0))
+        .floor();
+
+    for (var i = 0; i < toSpawn && raindrops.length < targetCount; i++) {
+      final ty =
+          basin.topY +
+          6.0 +
+          _fxRandom.nextDouble() * (basin.bottomY - basin.topY - 12.0);
+      final left = basin.leftX(ty) + 10.0;
+      final right = basin.rightX(ty) - 10.0;
+      if (right <= left) continue;
+      final tx = left + _fxRandom.nextDouble() * (right - left);
+      final vy = 240.0 + _fxRandom.nextDouble() * 75.0;
+      final vx = wind * 38.0 - 16.0;
+      final fallTime = .45 + _fxRandom.nextDouble() * .55;
+      raindrops.add(
+        RaindropState(
+          x: tx - vx * fallTime,
+          y: ty - vy * fallTime,
+          vx: vx,
+          vy: vy,
+          targetX: tx,
+          targetY: ty,
+          length: 5.0 + _fxRandom.nextDouble() * 4.5,
+        ),
       );
+    }
+
+    final allPads = [...pads, ...ambientPads];
+    for (var i = raindrops.length - 1; i >= 0; i--) {
+      final drop = raindrops[i];
+      drop.x += drop.vx * dt;
+      drop.y += drop.vy * dt;
+      if (drop.y >= drop.targetY) {
+        // Raindrop impact with lily pad or pond water surface!
+        PadState? hitPad;
+        for (final pad in allPads) {
+          final px = pad.x * 641 + pad.driftX;
+          final py = pad.y * 359 + pad.floatY + pad.dipY;
+          final nx = (drop.targetX - px) / pad.radiusX;
+          final ny = (drop.targetY - py) / pad.radiusY;
+          if (nx * nx + ny * ny <= 1.05) {
+            hitPad = pad;
+            break;
+          }
+        }
+        if (hitPad != null) {
+          // Raindrop strikes a lily pad: patter dip, tilt, dewdrop bounce & micro-splatter
+          final px = hitPad.x * 641 + hitPad.driftX;
+          final offset = ((drop.targetX - px) / hitPad.radiusX).clamp(
+            -1.0,
+            1.0,
+          );
+          final weight = hitPad.isAmbient ? 1.35 : .75;
+          hitPad.dipVelocity += 3.8 * weight;
+          hitPad.tiltVelocity += offset * 2.8 * weight;
+          hitPad.dewdropVelocity += 11.0;
+          _emitSplashDroplets(
+            drop.targetX,
+            drop.targetY - 1,
+            count: 2,
+            side: offset >= 0 ? 1 : -1,
+            power: .36,
+          );
+        } else {
+          // Raindrop strikes open pond water: concentric rain ripple + tiny splash crown
+          _emitRipple(
+            x: drop.targetX,
+            y: drop.targetY,
+            initialRadius: 1.2,
+            maxRadius: 13.0 + _fxRandom.nextDouble() * 9.0,
+            duration: .68,
+            intensity: weather == 'storm' ? .44 : .34,
+          );
+          if (_fxRandom.nextDouble() < .55) {
+            _emitSplashDroplets(
+              drop.targetX,
+              drop.targetY,
+              count: 2,
+              side: 0,
+              power: .32,
+            );
+          }
+        }
+        raindrops.removeAt(i);
+      }
     }
   }
 
@@ -881,9 +1118,11 @@ class PondModel {
       final dist = sqrt(dx * dx + dy * dy);
       if (dist < 155) {
         final factor = ((155 - dist) / 155) * impulse;
-        k.startleTimer = max(k.startleTimer, (.65 + factor * .75).clamp(0, 1.4));
+        k.startleTimer = max(
+          k.startleTimer,
+          (.65 + factor * .75).clamp(0, 1.4),
+        );
         k.targetHeading = atan2(dy, dx);
-        // Subtle subsurface swirl ripple when startled near surface
         if (k.depth < .45) {
           _emitRipple(
             x: k.x,
@@ -914,19 +1153,22 @@ class PondModel {
       final speed = (14.0 + (k.index % 2) * 3.5) * speedBoost;
       k.swimPhase = (k.swimPhase + dt * 2.6 * speedBoost) % (pi * 20);
 
-      // Smooth bank avoidance inside the pond basin (x: 85..555, y: 195..336)
-      if (k.x < 105) {
+      final minX = basin.leftX(k.y) + 22.0;
+      final maxX = basin.rightX(k.y) - 22.0;
+      final minY = basin.topY + 14.0;
+      final maxY = basin.bottomY - 12.0;
+
+      if (k.x < minX + 16) {
         k.targetHeading = 0.08 * (k.index.isEven ? 1 : -1);
-      } else if (k.x > 535) {
+      } else if (k.x > maxX - 16) {
         k.targetHeading = pi - 0.08 * (k.index.isEven ? 1 : -1);
       }
-      if (k.y < 205) {
+      if (k.y < minY + 10) {
         k.targetHeading = pi * .35;
-      } else if (k.y > 328) {
+      } else if (k.y > maxY - 10) {
         k.targetHeading = -pi * .35;
       }
 
-      // Shortest angular turn toward targetHeading + gentle meander
       var diff = k.targetHeading - k.heading;
       while (diff > pi) {
         diff -= pi * 2;
@@ -938,15 +1180,21 @@ class PondModel {
       k.heading += diff.clamp(-turnRate * dt, turnRate * dt);
       k.heading += sin(time * .45 + k.index * 1.9) * .18 * dt;
 
-      k.x = (k.x + cos(k.heading) * speed * dt).clamp(72.0, 568.0);
-      k.y = (k.y + sin(k.heading) * speed * .55 * dt).clamp(192.0, 338.0);
+      k.y = (k.y + sin(k.heading) * speed * .55 * dt).clamp(minY, maxY);
+      final clampedLeft = basin.leftX(k.y) + 18.0;
+      final clampedRight = basin.rightX(k.y) - 18.0;
+      k.x = (k.x + cos(k.heading) * speed * dt).clamp(
+        clampedLeft,
+        max(clampedLeft + 1, clampedRight),
+      );
+
       final prevDepth = k.depth;
-      final targetDepth = (
-        .36 +
-        (k.index % 3) * .12 +
-        sin(time * .38 + k.index * 1.7) * .26 +
-        k.startleTimer * .35
-      ).clamp(.08, .92);
+      final targetDepth =
+          (.36 +
+                  (k.index % 3) * .12 +
+                  sin(time * .38 + k.index * 1.7) * .26 +
+                  k.startleTimer * .35)
+              .clamp(.08, .92);
       k.depth += (targetDepth - k.depth) * (1 - exp(-dt * 2.8));
       k.pitch = ((k.depth - prevDepth) / max(dt, 1e-4) * 1.8).clamp(-.45, .45);
     }
@@ -957,12 +1205,149 @@ class PondModel {
       final speed = 22.0 * boost;
       t.swimPhase = (t.swimPhase + dt * 6.8 * boost) % (pi * 20);
       t.heading += sin(time * 1.3 + t.index * 2.1) * .65 * dt;
-      if (t.x < 95 || t.x > 545) t.heading = pi - t.heading;
-      if (t.y < 200 || t.y > 332) t.heading = -t.heading;
-      t.x = (t.x + cos(t.heading) * speed * dt).clamp(80.0, 560.0);
-      t.y = (t.y + sin(t.heading) * speed * .6 * dt).clamp(195.0, 336.0);
+      final minX = basin.leftX(t.y) + 14.0;
+      final maxX = basin.rightX(t.y) - 14.0;
+      final minY = basin.topY + 10.0;
+      final maxY = basin.bottomY - 10.0;
+      if (t.x < minX + 8 || t.x > maxX - 8) t.heading = pi - t.heading;
+      if (t.y < minY + 6 || t.y > maxY - 6) t.heading = -t.heading;
+      t.y = (t.y + sin(t.heading) * speed * .6 * dt).clamp(minY, maxY);
+      t.x = (t.x + cos(t.heading) * speed * dt).clamp(
+        basin.leftX(t.y) + 12.0,
+        max(basin.leftX(t.y) + 14.0, basin.rightX(t.y) - 12.0),
+      );
     }
   }
+}
+
+/// Per-biome trapezoidal open-water basin in logical `641 × 359` coordinates
+/// and grounded hero lily pad coordinates (`pad0X, pad0Y`, `pad1X, pad1Y`).
+class WaterBasin {
+  const WaterBasin({
+    required this.topY,
+    required this.bottomY,
+    required this.topLeftX,
+    required this.topRightX,
+    required this.bottomLeftX,
+    required this.bottomRightX,
+    required this.pad0X,
+    required this.pad0Y,
+    required this.pad1X,
+    required this.pad1Y,
+  });
+
+  final double topY;
+  final double bottomY;
+  final double topLeftX;
+  final double topRightX;
+  final double bottomLeftX;
+  final double bottomRightX;
+  final double pad0X;
+  final double pad0Y;
+  final double pad1X;
+  final double pad1Y;
+
+  double leftX(double y) {
+    final t = ((y - topY) / max(1.0, bottomY - topY)).clamp(0.0, 1.0);
+    return topLeftX + (bottomLeftX - topLeftX) * t;
+  }
+
+  double rightX(double y) {
+    final t = ((y - topY) / max(1.0, bottomY - topY)).clamp(0.0, 1.0);
+    return topRightX + (bottomRightX - topRightX) * t;
+  }
+
+  bool contains(double x, double y, {double margin = 0}) {
+    if (y < topY + margin || y > bottomY - margin) return false;
+    return x >= leftX(y) + margin && x <= rightX(y) - margin;
+  }
+
+  static WaterBasin forBiome(String biome) => switch (biome) {
+    'grotto' || 'crystal_grotto' => const WaterBasin(
+      topY: 248,
+      bottomY: 328,
+      topLeftX: 244,
+      topRightX: 396,
+      bottomLeftX: 188,
+      bottomRightX: 452,
+      pad0X: .36,
+      pad0Y: .77,
+      pad1X: .63,
+      pad1Y: .78,
+    ),
+    'sanctuary' || 'jade_sanctuary' => const WaterBasin(
+      topY: 244,
+      bottomY: 328,
+      topLeftX: 246,
+      topRightX: 434,
+      bottomLeftX: 192,
+      bottomRightX: 456,
+      pad0X: .36,
+      pad0Y: .76,
+      pad1X: .65,
+      pad1Y: .76,
+    ),
+    'alpine' => const WaterBasin(
+      topY: 238,
+      bottomY: 330,
+      topLeftX: 224,
+      topRightX: 428,
+      bottomLeftX: 176,
+      bottomRightX: 462,
+      pad0X: .34,
+      pad0Y: .75,
+      pad1X: .65,
+      pad1Y: .76,
+    ),
+    'maple' || 'autumn_mist' => const WaterBasin(
+      topY: 228,
+      bottomY: 326,
+      topLeftX: 206,
+      topRightX: 436,
+      bottomLeftX: 184,
+      bottomRightX: 454,
+      pad0X: .33,
+      pad0Y: .73,
+      pad1X: .66,
+      pad1Y: .75,
+    ),
+    'cypress' => const WaterBasin(
+      topY: 242,
+      bottomY: 328,
+      topLeftX: 218,
+      topRightX: 420,
+      bottomLeftX: 182,
+      bottomRightX: 450,
+      pad0X: .33,
+      pad0Y: .75,
+      pad1X: .65,
+      pad1Y: .76,
+    ),
+    'blossom' || 'lotus' => const WaterBasin(
+      topY: 236,
+      bottomY: 328,
+      topLeftX: 206,
+      topRightX: 440,
+      bottomLeftX: 174,
+      bottomRightX: 466,
+      pad0X: .32,
+      pad0Y: .74,
+      pad1X: .66,
+      pad1Y: .75,
+    ),
+    _ => const WaterBasin(
+      topY: 228,
+      bottomY: 328,
+      topLeftX: 210,
+      topRightX: 432,
+      bottomLeftX: 186,
+      bottomRightX: 452,
+      pad0X: .34,
+      pad0Y: .73,
+      pad1X: .65,
+      pad1Y: .75,
+    ),
+  };
 }
 
 class FrogState {
@@ -995,8 +1380,7 @@ class FrogState {
   double cooldown = 1;
   double bellyFlop = 0;
   double _fromX = 0, _fromY = 0, _toX = 0, _toY = 0;
-  double _duration = 1, _flightElapsed = 0, _arcHeight = .13;
-  double _swimAge = 0, _splashX = 0;
+  double _duration = 1, _swimAge = 0, _splashX = 0;
   int _targetLeaf;
   bool _returning = false;
 
@@ -1038,16 +1422,24 @@ class PadState {
     required this.y,
     required this.radiusX,
     required this.radiusY,
+    this.isAmbient = false,
+    this.hasLotus = false,
+    this.phase = 0,
   });
   final int index;
   final double x, y;
   final double radiusX, radiusY;
+  final bool isAmbient;
+  final bool hasLotus;
+  final double phase;
   double dipY = 0;
   double dipVelocity = 0;
   double tiltAngle = 0;
   double tiltVelocity = 0;
   double driftX = 0;
   double driftVelocity = 0;
+  double floatY = 0;
+  double floatVelocity = 0;
   double edgeFold = 0;
   double edgeFoldSide = 1;
   double waterWashAlpha = 0;
@@ -1126,6 +1518,22 @@ class SplashDroplet {
   double x, y, vx, vy;
   final double maxAge;
   double age = 0;
+}
+
+class RaindropState {
+  RaindropState({
+    required this.x,
+    required this.y,
+    required this.vx,
+    required this.vy,
+    required this.targetX,
+    required this.targetY,
+    required this.length,
+  });
+  double x, y;
+  final double vx, vy;
+  final double targetX, targetY;
+  final double length;
 }
 
 class BugState {

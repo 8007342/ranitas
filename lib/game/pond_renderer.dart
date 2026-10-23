@@ -229,25 +229,40 @@ class PondRenderer {
     // (Rendered OVER Koi & Tadpoles so ripples refract across underlying sprites)
     _waterSurfaceAndRipples(canvas, model, motion);
 
-    // TIER 4: Floating Interactive Lily Pads, Lotus Blooms, Splash Droplets, Frogs & Bugs
-    _pad(
-      canvas,
-      model.pads[0],
-      _width * model.pads[0].x,
-      _height * model.pads[0].y + 3 + model.leafNudge * 2,
-      t,
-      motion,
-      model.biome,
-    );
-    _pad(
-      canvas,
-      model.pads[1],
-      _width * model.pads[1].x,
-      _height * model.pads[1].y + 3 - model.leafNudge * 2,
-      t + 2,
-      motion,
-      model.biome,
-    );
+    // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Splash Droplets, Frogs & Bugs
+    final allPads = <(PadState, double, double, double)>[
+      for (final p in model.ambientPads)
+        (
+          p,
+          _width * p.x,
+          _height * p.y + 3 + p.floatY,
+          t + p.index * 1.1,
+        ),
+      (
+        model.pads[0],
+        _width * model.pads[0].x,
+        _height * model.pads[0].y + 3 + model.leafNudge * 2 + model.pads[0].floatY,
+        t,
+      ),
+      (
+        model.pads[1],
+        _width * model.pads[1].x,
+        _height * model.pads[1].y + 3 - model.leafNudge * 2 + model.pads[1].floatY,
+        t + 2,
+      ),
+    ]..sort((a, b) => a.$3.compareTo(b.$3));
+
+    for (final entry in allPads) {
+      _pad(
+        canvas,
+        entry.$1,
+        entry.$2,
+        entry.$3,
+        entry.$4,
+        motion,
+        model.biome,
+      );
+    }
     _splashDroplets(canvas, model);
 
     for (final frog in model.frogs) {
@@ -303,15 +318,19 @@ class PondRenderer {
   }
 
   void _waterCaustics(ui.Canvas c, PondModel m, double motion) {
-    // Dappled sub-surface caustic light ribbons and submerged lily stems
+    // Dappled sub-surface caustic light ribbons constrained to the biome water basin
+    final isGrotto = m.biome == 'grotto' || m.biome == 'crystal_grotto';
+    final causticColor = isGrotto ? 0xff49c9c4 : 0xff5ca89f;
     for (var i = 0; i < 24; i++) {
       final d = _details[48 + i];
-      final y = 198 + d.y * 145;
+      final y = m.basin.topY + d.y * (m.basin.bottomY - m.basin.topY);
+      final left = m.basin.leftX(y);
+      final right = m.basin.rightX(y);
       final drift = math.sin(m.time * .28 + d.w * 14) * 5 * motion;
-      final causticColor = m.biome == 'grotto' ? 0xff49c9c4 : 0xff5ca89f;
+      final x = (left + d.x * (right - left) + drift).clamp(left, right - 12);
       _rect(
         c,
-        75 + d.x * 490 + drift,
+        x,
         y,
         6 + d.z * 18,
         1,
@@ -319,16 +338,17 @@ class PondRenderer {
         .045 + d.z * .04,
       );
     }
-    for (final pad in m.pads) {
+    for (final pad in [...m.ambientPads, ...m.pads]) {
       final px = pad.x * _width + pad.driftX * .5;
-      final py = pad.y * _height + 5 + pad.dipY * .5;
+      final py = pad.y * _height + 5 + pad.floatY + pad.dipY * .5;
       final sway = math.sin(m.time * .6 + pad.index) * 2.5 * motion;
-      _line(c, px, py, px + sway, py + 28, 0xff0d333b, .35, 2);
+      final stemLen = pad.isAmbient ? 16.0 : 28.0;
+      _line(c, px, py, px + sway, py + stemLen, 0xff0d333b, .35, pad.isAmbient ? 1 : 2);
     }
   }
 
   void _subsurfaceWildlife(ui.Canvas c, PondModel m, double motion) {
-    final deepWater = m.biome == 'grotto'
+    final deepWater = (m.biome == 'grotto' || m.biome == 'crystal_grotto')
         ? const ui.Color(0xff082833)
         : const ui.Color(0xff0b303c);
 
@@ -547,24 +567,32 @@ class PondRenderer {
   }
 
   void _waterSurfaceAndRipples(ui.Canvas c, PondModel m, double motion) {
-    // 1. Specular water surface shimmer lines (composited OVER Koi & Tadpoles)
+    // 1. Specular water surface shimmer lines constrained to the biome water basin
     for (var i = 30; i < 115; i++) {
       final d = _details[i];
-      final y = 162 + d.y * 178;
+      final y = m.basin.topY + d.y * (m.basin.bottomY - m.basin.topY);
+      final left = m.basin.leftX(y);
+      final right = m.basin.rightX(y);
       final wave = math.sin(m.time * .35 + d.w * 20) * motion;
       final a = (.055 + d.z * .085) * (1 + m.richness * .4);
       final shimmerColor = switch (m.biome) {
-        'maple' => d.z > .55 ? 0xffffb380 : 0xff9ad8cb,
-        'grotto' => d.z > .55 ? 0xff7df4eb : 0xff9b92f0,
-        'sanctuary' => d.z > .6 ? 0xffffd28a : 0xff8ed6c1,
+        'maple' || 'autumn_mist' => d.z > .55 ? 0xffffb380 : 0xff9ad8cb,
+        'grotto' || 'crystal_grotto' => d.z > .55 ? 0xff7df4eb : 0xff9b92f0,
+        'sanctuary' || 'jade_sanctuary' => d.z > .6 ? 0xffffd28a : 0xff8ed6c1,
         'alpine' => d.z > .6 ? 0xffffd3dc : 0xffa8e9f0,
+        'lotus' => d.z > .55 ? 0xfff7c0d8 : 0xff9ae3d2,
+        'firefly' => d.z > .55 ? 0xffeef29b : 0xff85d1cf,
         _ => d.z > .65 ? 0xffffc6ac : 0xffa0dbcc,
       };
+      final w = 4.0 + d.z * 26.0;
+      final x = (left + d.x * (right - left) + wave * 3.0)
+          .clamp(left, math.max(left, right - w))
+          .toDouble();
       _rect(
         c,
-        d.x * _width + wave * 3,
+        x,
         y,
-        4 + d.z * 26,
+        w,
         1,
         shimmerColor,
         a,
@@ -574,8 +602,9 @@ class PondRenderer {
     // 2. Composable Dual-Ring Expanding Water Ripples (INTERACTION_STYLEGUIDE §2)
     //    Outer bright specular crest + inner dark refraction trough ring
     final crestColor = switch (m.biome) {
-      'grotto' => 0xff9ef7f0,
-      'maple' || 'sanctuary' => 0xffffe5ba,
+      'grotto' || 'crystal_grotto' => 0xff9ef7f0,
+      'maple' || 'autumn_mist' || 'sanctuary' || 'jade_sanctuary' => 0xffffe5ba,
+      'lotus' => 0xfffce2ed,
       _ => 0xffd0f5ee,
     };
     for (final r in m.ripples) {
@@ -621,29 +650,34 @@ class PondRenderer {
     final px = x + pad.driftX;
     final py = y + bob + pad.dipY;
     final rx = pad.radiusX;
-    final ry = (pad.radiusY - pad.dipY.abs() * .18).clamp(8.5, 14.0);
+    final minRy = math.min(pad.radiusY, math.max(2.2, pad.radiusY * .72));
+    final maxRy = math.max(minRy, pad.radiusY + .5);
+    final ry = (pad.radiusY - pad.dipY.abs() * .18).clamp(minRy, maxRy);
+    final scaleRatio = (rx / 35.0).clamp(0.32, 1.15);
     final tilt = pad.tiltAngle;
     final fold = pad.edgeFold;
     final foldSide = pad.edgeFoldSide;
 
-    final padMid = biome == 'grotto'
+    final isGrotto = biome == 'grotto' || biome == 'crystal_grotto';
+    final isMaple = biome == 'maple' || biome == 'autumn_mist';
+    final padMid = isGrotto
         ? 0xff288588
-        : biome == 'maple'
+        : isMaple
         ? 0xff3b785f
         : 0xff32776a;
-    final padLight = biome == 'grotto'
+    final padLight = isGrotto
         ? 0xff49b0a8
-        : biome == 'maple'
+        : isMaple
         ? 0xff5ca177
         : 0xff49947a;
-    final veinColor = biome == 'grotto' ? 0xff92efe3 : 0xffb7cd86;
+    final veinColor = isGrotto ? 0xff92efe3 : 0xffb7cd86;
 
     // 1. Subsurface pad shadow (expands slightly when pad dips into water)
     _oval(
       c,
       px,
-      py + 5 - pad.dipY * .3,
-      rx + 5 + pad.dipY.clamp(0, 4) * .6,
+      py + 4 * scaleRatio - pad.dipY * .3,
+      rx + 4 * scaleRatio + pad.dipY.clamp(0, 4) * .6,
       ry + 1,
       0xff092d3d,
       .44,
@@ -651,12 +685,12 @@ class PondRenderer {
 
     // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
     final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
-    if (rimLift > 0.6) {
+    if (rimLift > 0.5) {
       final liftedSide = tilt >= 0 ? -1.0 : 1.0;
       _oval(
         c,
-        px + liftedSide * 2.5,
-        py + 2.5,
+        px + liftedSide * 2.2 * scaleRatio,
+        py + 2.0 * scaleRatio,
         rx - 1,
         ry,
         0xff6b3a50,
@@ -665,12 +699,21 @@ class PondRenderer {
     }
 
     // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
-    final foldCompressX = fold * 2.8;
+    final foldCompressX = fold * 2.8 * scaleRatio;
     final bodyCenterX = px - foldSide * foldCompressX * .5;
-    final bodyRx = rx - foldCompressX * .5;
-    _oval(c, bodyCenterX, py + 2, bodyRx, ry, 0xff143e3a);
+    final bodyRx = math.max(3.5, rx - foldCompressX * .5);
+    _oval(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, 0xff143e3a);
     _oval(c, bodyCenterX, py, bodyRx, ry, padMid);
-    _oval(c, bodyCenterX - 3, py - 2 + tilt * 3, bodyRx - 4, ry - 2, padLight);
+    if (bodyRx > 6 && ry > 3.2) {
+      _oval(
+        c,
+        bodyCenterX - 2.5 * scaleRatio,
+        py - 1.5 * scaleRatio + tilt * 3 * scaleRatio,
+        bodyRx - 3.5 * scaleRatio,
+        math.max(1.5, ry - 1.8 * scaleRatio),
+        padLight,
+      );
+    }
 
     // 4. Center water-cup depression when frog lands in Zone A (center)
     if (pad.dipY > 1.0 && fold < 0.35) {
@@ -679,45 +722,57 @@ class PondRenderer {
     }
 
     // 5. Radial leaf veins & V-notch
-    _line(
-      c,
-      bodyCenterX - bodyRx + 5,
-      py - 3,
-      bodyCenterX - 6,
-      py - ry + 1,
-      0xff90bc84,
-      .8,
-    );
-    for (var i = -3; i <= 3; i++) {
+    if (scaleRatio > 0.55) {
       _line(
         c,
-        bodyCenterX,
-        py + 1,
-        bodyCenterX + i * bodyRx * .26,
-        py - ry + 3 + i * tilt * 2.5,
-        veinColor,
-        .28,
+        bodyCenterX - bodyRx + 5 * scaleRatio,
+        py - 3 * scaleRatio,
+        bodyCenterX - 6 * scaleRatio,
+        py - ry + 1,
+        0xff90bc84,
+        .8,
       );
+      for (var i = -3; i <= 3; i++) {
+        _line(
+          c,
+          bodyCenterX,
+          py + 1,
+          bodyCenterX + i * bodyRx * .26,
+          py - ry + 3 * scaleRatio + i * tilt * 2.5,
+          veinColor,
+          .28,
+        );
+      }
     }
     _line(
       c,
       bodyCenterX,
       py + 1,
       bodyCenterX + bodyRx - 1,
-      py + ry - 2,
+      py + ry - 1.5 * scaleRatio,
       0xff153f42,
       1,
-      2,
+      scaleRatio > 0.65 ? 2 : 1,
     );
-    _line(
-      c,
-      bodyCenterX + 1,
-      py + 2,
-      bodyCenterX + bodyRx - 2,
-      py + ry - 1,
-      0xff67a47b,
-    );
-    _rect(c, bodyCenterX - bodyRx + 8, py + 2, 8, 1, 0xff94c195, .65);
+    if (scaleRatio > 0.5) {
+      _line(
+        c,
+        bodyCenterX + 1,
+        py + 2,
+        bodyCenterX + bodyRx - 2,
+        py + ry - 1,
+        0xff67a47b,
+      );
+      _rect(
+        c,
+        bodyCenterX - bodyRx + 7 * scaleRatio,
+        py + 1.5 * scaleRatio,
+        7 * scaleRatio,
+        1,
+        0xff94c195,
+        .65,
+      );
+    }
 
     // 6. Edge-Fold Deformation & Water-Wash Tongue (Zone C Edge Landing)
     if (fold > 0.05) {
@@ -756,19 +811,22 @@ class PondRenderer {
     }
 
     // 7. Bouncing surface dewdrop bead on the pad
-    final dropX = bodyCenterX - pad.index * 8 + 4;
-    final dropY = py - 2 - pad.dewdropBounce.abs() * 1.4;
-    _rect(c, dropX, dropY, 2, 2, 0xffb8efe6, .78);
-    _rect(c, dropX, dropY, 1, 1, 0xffffffff, .9);
+    if (scaleRatio > 0.48) {
+      final dropX = bodyCenterX - (pad.index % 2) * 6 * scaleRatio + 3 * scaleRatio;
+      final dropY = py - 1.5 * scaleRatio - pad.dewdropBounce.abs() * 1.4;
+      _rect(c, dropX, dropY, 2, 2, 0xffb8efe6, .78);
+      _rect(c, dropX, dropY, 1, 1, 0xffffffff, .9);
+    }
 
-    // 8. Companion floating water lotus bloom beside pad 0
-    if (pad.index == 0) {
-      final lx = px - rx - 10 + math.sin(t * .5) * 1.2 * motion;
-      final ly = py + 5 + pad.dipY * .35;
-      _oval(c, lx, ly + 2, 8, 3, 0xff1f5750, .85);
-      _oval(c, lx - 3, ly, 4, 2, 0xffe69cb8, .92);
-      _oval(c, lx + 3, ly, 4, 2, 0xffe69cb8, .92);
-      _oval(c, lx, ly - 1, 4, 3, 0xfffad2e1, .95);
+    // 8. Companion floating water lotus bloom beside pad 0 or lotus-bearing ambient pads
+    if (pad.index == 0 || pad.hasLotus) {
+      final bScale = pad.isAmbient ? (scaleRatio * 1.15).clamp(0.55, 0.95) : 1.0;
+      final lx = px - rx - 8 * bScale + math.sin(t * .5) * 1.2 * motion;
+      final ly = py + 4 * bScale + pad.dipY * .35;
+      _oval(c, lx, ly + 2 * bScale, 8 * bScale, 3 * bScale, 0xff1f5750, .85);
+      _oval(c, lx - 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
+      _oval(c, lx + 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
+      _oval(c, lx, ly - 1 * bScale, 4 * bScale, 3 * bScale, 0xfffad2e1, .95);
       _rect(c, lx - 1, ly - 1, 2, 2, 0xffffd966, .95);
     }
   }
@@ -782,13 +840,15 @@ class PondRenderer {
   }
 
   void _motifs(ui.Canvas c, PondModel m, double motion, double night) {
-    if (m.biome == 'sanctuary') {
+    if (m.biome == 'sanctuary' || m.biome == 'jade_sanctuary') {
       final flicker = reducedMotion
           ? .85
           : .75 + .25 * math.sin(m.time * 4.3) * math.cos(m.time * 2.7);
       final glowAlpha = (.18 + night * .35 + m.richness * .2) * flicker;
-      _oval(c, 114, 168, 12, 9, 0xffffb85c, glowAlpha * .45);
-      _oval(c, 114, 168, 5, 4, 0xffffefc2, glowAlpha * .85);
+      final glowCol = m.biome == 'jade_sanctuary' ? 0xff7ef5c4 : 0xffffb85c;
+      final coreCol = m.biome == 'jade_sanctuary' ? 0xffdfffe8 : 0xffffefc2;
+      _oval(c, 114, 168, 12, 9, glowCol, glowAlpha * .45);
+      _oval(c, 114, 168, 5, 4, coreCol, glowAlpha * .85);
       for (var i = 0; i < 7; i++) {
         final sway = math.sin(m.time * 1.4 + i) * 2.5 * motion;
         _rect(
@@ -797,11 +857,11 @@ class PondRenderer {
           252 + i * 6.0,
           16 - i * 1.6,
           2,
-          0xffffbe66,
+          glowCol,
           glowAlpha * (.55 - i * .06),
         );
       }
-    } else if (m.biome == 'grotto') {
+    } else if (m.biome == 'grotto' || m.biome == 'crystal_grotto') {
       for (var i = 0; i < 18; i++) {
         final d = _details[165 + i];
         final pulse = reducedMotion
@@ -818,8 +878,11 @@ class PondRenderer {
         _oval(c, sideX, sy, 3, 2, color, pulse * (.14 + m.richness * .18));
         _rect(c, sideX, sy, 1, 1, 0xffffffff, pulse * (.45 + night * .35));
       }
-    } else if (m.biome == 'maple' || m.biome == 'blossom') {
-      final isMaple = m.biome == 'maple';
+    } else if (m.biome == 'maple' ||
+        m.biome == 'autumn_mist' ||
+        m.biome == 'blossom' ||
+        m.biome == 'lotus') {
+      final isMaple = m.biome == 'maple' || m.biome == 'autumn_mist';
       for (var i = 0; i < 16; i++) {
         final d = _details[170 + i];
         final driftX =
@@ -840,7 +903,7 @@ class PondRenderer {
         _rect(c, driftX, driftY, isMaple ? 4 : 3, 2, color, .55 + d.z * .3);
         _rect(c, driftX + 1, driftY - 1, 2, 1, color, .4);
       }
-    } else if (m.biome == 'cypress') {
+    } else if (m.biome == 'cypress' || m.biome == 'firefly') {
       for (var i = 0; i < 14; i++) {
         final d = _details[185 + i];
         final x = i.isEven ? 20 + d.x * 150 : _width - 20 - d.x * 150;
@@ -852,9 +915,11 @@ class PondRenderer {
   }
 
   void _foliage(ui.Canvas c, PondModel m, double motion, bool hasImage) {
-    final blossom = m.biome == 'blossom' || m.biome == 'sanctuary';
-    final maple = m.biome == 'maple';
-    final grotto = m.biome == 'grotto';
+    final blossom = m.biome == 'blossom' ||
+        m.biome == 'sanctuary' ||
+        m.biome == 'lotus';
+    final maple = m.biome == 'maple' || m.biome == 'autumn_mist';
+    final grotto = m.biome == 'grotto' || m.biome == 'crystal_grotto';
     for (var i = 100; i < 126; i++) {
       final d = _details[i];
       final right = i.isEven;
@@ -958,7 +1023,7 @@ class PondRenderer {
       }
     }
     final rain = m.weather == 'drizzle' || m.weather == 'storm';
-    if (m.weather == 'mist' || m.weather == 'storm') {
+    if (m.weather == 'mist' || m.weather == 'storm' || m.biome == 'autumn_mist') {
       for (var i = 0; i < 9; i++) {
         final d = _details[70 + i];
         final x = -70 + d.x * 380 + math.sin(m.time * .035 + i) * 24 * motion;
@@ -969,27 +1034,36 @@ class PondRenderer {
           240 + d.z * 180,
           3 + d.w * 6,
           0xffb7cdd0,
-          m.weather == 'mist' ? .055 : .035,
+          m.weather == 'mist' || m.biome == 'autumn_mist' ? .055 : .035,
         );
       }
     }
     if (rain) {
-      final count = reducedMotion ? 16 : (m.weather == 'storm' ? 110 : 48);
-      for (var i = 0; i < count; i++) {
-        final d = _details[i];
-        final rainSpeed =
-            (reducedMotion ? 12 : 85) * (.1 + .9 * m.richness.clamp(0.0, 1.0));
-        final y = (d.y * _height + m.time * rainSpeed) % _height;
-        final x = (d.x * _width + m.wind * y * .08) % _width;
-        _line(
-          c,
-          x,
-          y,
-          x - 1 - m.wind * 2,
-          y + 3 + d.z * 4,
-          0xffb8d3d6,
-          .12 + d.w * .15,
-        );
+      if (!reducedMotion && m.raindrops.isNotEmpty) {
+        final windDx = m.wind * 2.4;
+        for (final drop in m.raindrops) {
+          if (drop.y < -8) continue;
+          final endY = math.min(drop.y, drop.targetY);
+          final startY = endY - drop.length;
+          if (startY > drop.targetY) continue;
+          _line(
+            c,
+            drop.x - windDx,
+            startY,
+            drop.x,
+            endY,
+            0xffc6e4e8,
+            .32,
+          );
+          _rect(c, drop.x, endY, 1, 1, 0xffe8fafc, .52);
+        }
+      } else {
+        for (var i = 0; i < 16; i++) {
+          final d = _details[i];
+          final y = (d.y * _height + m.time * 12) % _height;
+          final x = (d.x * _width + m.wind * y * .08) % _width;
+          _line(c, x, y, x - 1 - m.wind * 2, y + 4, 0xffb8d3d6, .18);
+        }
       }
     }
     final night = (1 - m.daylight).clamp(0.0, 1.0);

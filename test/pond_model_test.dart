@@ -46,21 +46,22 @@ void main() {
     }
   });
 
-  test('hold boundaries choose predictable tap, low and high arcs and launch near-immediately', () {
+  test('hold boundaries choose predictable tap, low and high arcs and auto-launch high jump with a single unbroken parabola', () {
     for (final entry in <double, String>{
       0: 'tap',
-      .179: 'tap',
-      .18: 'low',
-      .519: 'low',
-      .52: 'high',
-      .65: 'high',
+      .109: 'tap',
+      .11: 'low',
+      .259: 'low',
+      .26: 'high',
+      .40: 'high',
     }.entries) {
       final model = PondModel(seed: 4);
       model.press();
       model.update(entry.key);
-      if (entry.key >= .08) {
-        // Frog launches near-immediately while the button is still held down
+      if (entry.key >= .26) {
+        // High jump auto-launches at 0.26s while the button is still held down
         expect(model.frogs[0].airborne, isTrue);
+        expect(model.frogs[0].action, 'high');
       }
       model.press(); // Duplicate pointer down or mid-air press is ignored.
       model.release();
@@ -69,7 +70,9 @@ void main() {
       model.update(1.4);
       expect(model.frogs[0].leafIndex, 1);
       final frog = model.frogs[0];
-      final offset = sqrt(pow(frog.x - .685, 2) + pow(frog.y - .72, 2));
+      final expectedX = model.pads[1].x - .045;
+      final expectedY = model.pads[1].y;
+      final offset = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(offset, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
     }
   });
@@ -206,7 +209,7 @@ void main() {
     final biomes = <String>{};
     final weatherCounts = <String, int>{};
     var duskCount = 0;
-    for (var seed = 0; seed < 1000; seed++) {
+    for (var seed = 0; seed < 1200; seed++) {
       final a = PondModel(seed: seed);
       final b = PondModel(seed: seed);
       expect([a.biome, a.weather, a.cycle], [b.biome, b.weather, b.cycle]);
@@ -216,9 +219,9 @@ void main() {
     }
     expect(biomes, PondModel.biomes.toSet());
     expect(weatherCounts.keys.toSet(), {'clear', 'mist', 'drizzle', 'storm'});
-    expect(duskCount, inInclusiveRange(680, 820));
-    expect(weatherCounts['clear']! + weatherCounts['mist']!, greaterThan(700));
-    expect(weatherCounts['storm']!, lessThan(100));
+    expect(duskCount, inInclusiveRange(800, 990));
+    expect(weatherCounts['clear']! + weatherCounts['mist']!, greaterThan(840));
+    expect(weatherCounts['storm']!, lessThan(120));
   });
 
   test(
@@ -228,25 +231,25 @@ void main() {
       final frog = model.frogs[0];
       expect(frog.currentPose(), 'idle');
       model.press();
-      model.update(.04);
+      model.update(.15);
       expect(frog.currentPose(charging: model.pressing), 'charging');
       // Place a live bug along frog 0's low jump arc so it chomps mid-flight
+      final midX = (model.pads[0].x + model.pads[1].x - .045) * .5;
+      final midY = (model.pads[0].y + model.pads[1].y) * .5 - .29;
       model.bugs.add(
         BugState(
-          x: .50,
-          y: .43,
+          x: midX,
+          y: midY,
           vx: 0,
           vy: 0,
           phase: 0,
           species: 'dragonfly',
         )..opacity = 1,
       );
-      model.update(.04);
+      model.release();
       expect(frog.airborne, isTrue);
       expect(frog.currentPose(), 'launching');
       final seenPoses = <String>{frog.currentPose()};
-      model.update(.14);
-      model.release();
       while (frog.airborne) {
         model.update(1 / 60);
         seenPoses.add(frog.currentPose());
@@ -367,12 +370,47 @@ void main() {
         expect((frog.x - x).abs(), lessThan(.02));
         expect((frog.y - y).abs(), lessThan(.02));
       }
-      final radius = sqrt(pow(frog.x - .685, 2) + pow(frog.y - .72, 2));
+      final expectedX = model.pads[1].x - .045;
+      final expectedY = model.pads[1].y;
+      final radius = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(radius, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
       offsets.add(radius);
     }
     expect(offsets.length, 30);
   });
+
+  test(
+    'ambient pads rest inside biome water basin and interactive rain spawns pond ripples',
+    () {
+      final rainyModel = List.generate(
+        200,
+        (seed) => PondModel(seed: seed),
+      ).firstWhere((m) => m.weather == 'drizzle' || m.weather == 'storm');
+
+      expect(rainyModel.ambientPads.length, inInclusiveRange(5, 8));
+      expect(rainyModel.raindrops, isNotEmpty);
+
+      for (final p in [...rainyModel.pads, ...rainyModel.ambientPads]) {
+        final py = p.y * 359;
+        final px = p.x * 641;
+        expect(py, inInclusiveRange(rainyModel.basin.topY, rainyModel.basin.bottomY));
+        expect(
+          px,
+          inInclusiveRange(
+            rainyModel.basin.leftX(py),
+            rainyModel.basin.rightX(py),
+          ),
+        );
+      }
+
+      rainyModel.update(2.0);
+      expect(rainyModel.ripples, isNotEmpty);
+      expect(
+        rainyModel.ambientPads.any((p) => p.driftX.abs() > 0 || p.floatY.abs() > 0),
+        isTrue,
+      );
+    },
+  );
 
   test('rejects invalid deltas and overrides without corrupting state', () {
     for (final value in [0.0, -1.0, double.nan, double.infinity]) {

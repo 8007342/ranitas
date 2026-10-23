@@ -66,10 +66,10 @@ void main() {
     }
   });
 
-  test('only a completed gesture starts play; cancellation clears charge', () {
+  test('only a completed or auto-launched gesture starts play; cancellation clears charge', () {
     final p = PondModel(seed: 1);
     p.press();
-    p.update(1);
+    p.update(.15);
     expect(p.started, isFalse);
     expect(p.elapsed, 0);
     p.cancelPress();
@@ -82,15 +82,13 @@ void main() {
     expect(p.elapsed, closeTo(1, 1 / 60));
   });
 
-  test('a thousand busy gestures retain at most one pending action', () {
+  test('a thousand busy gestures while a frog is in the air are ignored', () {
     final burst = PondModel(seed: 1);
     gesture(burst);
     burst.update(.1);
     for (var i = 0; i < 1000; i++) {
       gesture(burst);
     }
-    // Chaotic input may affect splash probability and landing randomness.
-    // Count actual player launches rather than requiring identical motion.
     var launches = 1;
     var airborne = true;
     var phase = burst.frogs.first.jumpPhase;
@@ -104,8 +102,8 @@ void main() {
     }
     expect(
       launches,
-      2,
-      reason: 'Only the initial and latest pending jump may launch',
+      1,
+      reason: 'Queued gestures while a frog is in the air are ignored',
     );
   });
 

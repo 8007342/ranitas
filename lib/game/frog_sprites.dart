@@ -49,7 +49,7 @@ class FrogSprites {
         : 0.0;
     final padDx = (!frog.airborne && !frog.swimming) ? activePad.driftX : 0.0;
     final padDy = (!frog.airborne && !frog.swimming)
-        ? (padBob + activePad.dipY + padTiltDy + foldDrop)
+        ? (padBob + activePad.floatY + activePad.dipY + padTiltDy + foldDrop)
         : 0.0;
 
     final x = (frog.x * 641 + padDx).roundToDouble();
@@ -224,7 +224,7 @@ class FrogSprites {
     var offsetY = breath;
 
     if (charging) {
-      final c = (model.holdDuration / .65).clamp(0.0, 1.0);
+      final c = (model.holdDuration / .26).clamp(0.0, 1.0);
       final eased = 1 - math.pow(1 - c, 3).toDouble();
       scaleX = 1 + eased * .14;
       scaleY = 1 - eased * .20;
