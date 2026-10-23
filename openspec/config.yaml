@@ -1,0 +1,13 @@
+schema: spec-driven
+context: |
+  Ranitas is a Flutter and Flame portrait pixel-art pond for mobile browsers,
+  tablets, and desktops. No score, HUD, lives, loss, replay, or restart.
+  First gesture starts a silent near-static scene. Three hold durations choose
+  frog jump arcs. Coherent seeded scenery, gentle adaptive pacing, synthetic
+  ambience, and gradually changing light culminate in sleeping frogs and
+  an indefinitely living pond. No analytics or server state.
+  Deploy static Flutter web output to Cloudflare Workers or Pages.
+rules:
+  specs:
+    - Use SHALL requirements and concrete WHEN/THEN scenarios.
+    - Preserve the silent introduction and irreversible peaceful ending.

@@ -1,0 +1,12 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/flutter_bootstrap.js
+  Cache-Control: no-cache
+/main.dart.js
+  Cache-Control: no-cache
