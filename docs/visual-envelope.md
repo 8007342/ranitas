@@ -106,32 +106,33 @@ look mushy. A procedural or hand-painted index map looks better.
 - The styleguide's phase thresholds (`.44/.58`) and the code (`.52`) already
   disagree (`art/STYLEGUIDE.md:62-66`, `pond_model.dart:1409`).
 
-## Provisional decisions
+## Decisions
 
-These are defaults so the work can proceed. Each maps to an open question
-below.
+Rows marked **Decided** were answered by the project owner on 2026-10-25. The
+rest are provisional defaults. Q numbers are the original numbering; the open
+questions below have been renumbered.
 
 | # | Topic | Default taken |
 | --- | --- | --- |
-| Q1 | Where rain varies | Only inside drizzle and storm sessions; clear and mist stay dry, so the spec'd weather distribution holds |
+| Q1 | Where rain varies | **Decided: follow nature.** Clear stays dry; mist never showers but thickens toward night and sheds fine fog drizzle (≤ 0.15) when thick; drizzle and storm vary |
 | Q2 | Storm look | Darker clouds and heavier sheets of rain; never lightning |
 | Q3 | Night insects | Fixed per-biome tables; all catchable |
 | Q4 | Night grade | Colour matrix (no shader), shared indigo night with per-biome overrides for grotto, crystal_grotto and sanctuary |
 | Q5 | What stays lit | Lanterns, fungi, windows, moon and stars, through script-generated masks |
 | Q6 | Waterfall | Procedural index map now; painted map requested |
-| Q7 | Cycle feel | Blended (smooth) by default; per-region switch for hard steps |
+| Q7 | Cycle feel | **Decided: by material.** Water and bioluminescence blend smoothly; fire (lanterns) steps hard |
 | Q8 | New layers | Procedural canopy per biome now; painted canopy, mid-bank and foreground requested |
 | Q9 | Parallax | Wind sway plus slow breathing parallax; no pointer parallax; canopy keeps the central lane clear above 30 % height |
 | Q10 | Integer re-export | Deferred; requested in the asset list |
-| Q11 | Drift amount | Hero wander ±6–8 px depth, slide ≤12 px per jump; ambient sections 22–30 px |
-| Q12 | Pads carry frogs | Yes, including sleeping frogs (pads freeze their slow drift during sleep) |
+| Q11 | Drift amount | **Decided: small roam, all pads.** Hero sections 10–14 px, ambient 4–10 px; ripples, koi and pad wakes push every pad |
+| Q12 | Pads carry frogs | **Decided:** yes; roaming continues through sleep and the sleeping frogs ride their leaves |
 | Q13 | Counts and sizes | 2 hero (base radius 30–40 px) + 5–9 ambient (9.5–21 px) |
 | Q14 | Occlusion | Pads never overlap; frogs depth-sort with pads |
 | Q15 | Yaw | Veins and lotus only |
 | Q16 | Frog scale | Scales with depth, quantised to 1/16 |
 | Q17 | Depth-jump targets | Hero pads are seeded at different depths, so ordinary jumps gain depth |
 | Q18 | JEV retraining | Not needed now; optional polish |
-| Q19 | Sheet re-quantisation | Not done; requested |
+| Q19 | Sheet re-quantisation | **Decided:** request regenerated assets on a true pixel grid as needed (`art/ASSET_REQUESTS.md`) |
 
 ## Implementation status (2026-10-25)
 
@@ -170,31 +171,58 @@ smoke test, not in a browser or on a device.
   painted backdrops, most noticeably the sanctuary bamboo. Painted canopy
   layers (`art/ASSET_REQUESTS.md` §2) are the intended fix.
 
+## Prime sizes and pixel scaling
+
+The owner asked whether prime dimensions give free antialiasing when resizing.
+In this pipeline they don't. Here is why, with the trade-offs, so the call can
+be made deliberately:
+
+- **No smoothing happens.** Every image here is drawn with
+  `FilterQuality.none` (nearest neighbour), which never blends neighbouring
+  pixels. On a non-integer scale it **duplicates some source pixels and not
+  others**, so pixel widths alternate (e.g. 1-2-2-1-2). That is aliasing, not
+  antialiasing.
+- **Primes guarantee the uneven case.** A prime size shares no factor with any
+  other size, so the ratio to any display is always non-integer and the
+  unevenness is guaranteed rather than avoided. Primes stop a regular grid from
+  lining up, which can hide *moiré* in some cases, but they don't smooth
+  anything.
+- **The pixels are already uneven before drawing.** The 1376×768 sources were
+  nearest-upscaled by 1.858× into the 2557×1439 exports, which bakes uneven
+  pixels into the files. They are then scaled again to the 641×359 logical
+  canvas and again to the device. Three resamples compound the irregularity.
+- **Where smoothing would come from:** a smoothing filter (`FilterQuality.low`
+  or higher) blends neighbours on any scale, prime or not. That gives softness,
+  at the cost of crisp pixels.
+
+A whole-number re-export (e.g. 2752×1536 = 2 × 1376×768) removes one of the
+three resamples and halves the file weight. It doesn't make the final
+device-scale even, because screens vary. Keeping primes as a house style is
+fine. The only change needed is to stop baking a non-integer resample into the
+files. This is not decided yet; it is open question 10.
+
 ## Open questions
 
-1. Should clear or mist sessions ever develop passing showers? That would
-   change the "persistent weather" requirement.
-2. In storms, should thunder density follow rain intensity?
-3. Which night insects are prey and which are only ambience? Should each biome
+Answered on 2026-10-25 and removed from this list: showers and fog (now
+follows nature), cycle feel (by material), drift amount (small, all pads),
+riding during sleep (yes), and regenerating sheets (yes, on request).
+
+1. In storms, should thunder density follow rain intensity?
+2. Which night insects are prey and which are only ambience? Should each biome
    use a fixed table or a seeded subset?
-4. Should night push every biome toward one indigo, or should each biome keep
+3. Should night push every biome toward one indigo, or should each biome keep
    its own palette? Would you accept a fragment-shader LUT later?
-5. Which painted elements must glow at night in each backdrop? Do you want to
+4. Which painted elements must glow at night in each backdrop? Do you want to
    approve the script-generated emissive masks, or paint them instead?
-6. Which other regions should palette-cycle (grotto water, mushroom caps, the
-   alpine stream, the sanctuary lantern)?
-7. For cycling, do you prefer smooth blending or the authentic hard-stepped
-   90s look?
-8. How many painted layers per biome are you willing to commission?
-9. Should canopy layers ever cross the central play lane?
-10. Should every backdrop be re-exported at an integer scale before more layers
-    are added?
-11. Should drift be more dramatic, with pads visibly roaming the pond?
-12. Should sleeping frogs keep riding their pads' slow drift?
-13. Do you want any giant or tiny pads beyond the default size ranges?
-14. May pads slide behind one another, with the near pad occluding the far one?
-15. Is a rotated-ellipse pad renderer worth it for true yaw?
-16. Should frog scale be continuous, or snap between a few painted sizes?
-17. Should depth jumps also be able to land on ambient pads, or in open water?
-18. Should JEV learn depth-aware jumps? That needs retraining.
-19. May the painted frog sheets be re-quantised to a hard 42×36 grid?
+5. Which other regions should palette-cycle (grotto water, mushroom caps, the
+   alpine stream)?
+6. How many painted layers per biome are you willing to commission?
+7. Should canopy layers ever cross the central play lane?
+8. Should the backdrops be re-exported at a whole-number scale (see "Prime
+   sizes and pixel scaling")?
+9. Do you want any giant or tiny pads beyond the default size ranges?
+10. May pads slide behind one another, with the near pad occluding the far one?
+11. Is a rotated-ellipse pad renderer worth it for true yaw?
+12. Should frog scale be continuous, or snap between a few painted sizes?
+13. Should depth jumps also be able to land on ambient pads, or in open water?
+14. Should JEV learn depth-aware jumps? That needs retraining.

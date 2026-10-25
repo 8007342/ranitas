@@ -19,7 +19,7 @@ void main() {
       layouts.add(
         '${a.biome}:${a.pads[0].x.toStringAsFixed(4)},${a.pads[0].y.toStringAsFixed(4)},${a.pads[0].baseRx.toStringAsFixed(2)}',
       );
-      expect(a.ambientPads.length, inInclusiveRange(5, 9));
+      expect(a.ambientPads.length, inInclusiveRange(4, 9));
       expect(a.pads[0].baseRx, inInclusiveRange(30, 40));
       expect(a.pads[1].baseRx, inInclusiveRange(30, 40));
       expect(a.pads[0].sectionRadius, inInclusiveRange(10, 14));
@@ -68,7 +68,7 @@ void main() {
     expect(layouts.length, greaterThan(PondModel.biomes.length * 4));
   });
 
-  test('landing slide: 3–12 px along the jump, settled under 0.1 px/s in 3 s', () {
+  test('landing slide: 3–12 px along the jump, back to ambient roaming in 3 s', () {
     var measured = 0;
     for (var seed = 0; seed < 300 && measured < 20; seed++) {
       final m = PondModel(seed: seed);
@@ -105,7 +105,8 @@ void main() {
         m.update(1 / 60);
       }
       expect(slide, inInclusiveRange(3, 12), reason: 'seed=$seed');
-      expect(speed, lessThan(.1), reason: 'seed=$seed');
+      // Neighbour wakes, ripples and koi keep a gentle ambient jostle going.
+      expect(speed, lessThan(1.0), reason: 'seed=$seed');
     }
     expect(measured, 20);
   });

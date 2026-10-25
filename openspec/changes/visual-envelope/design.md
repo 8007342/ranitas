@@ -22,7 +22,16 @@ integer scale, retraining the JEV prior, native audio.
 
 ## Decisions
 
-### D1 Rain intensity envelope (provisional: inside drizzle/storm only)
+### D1 Rain intensity envelope (decided 2026-10-25: follow nature)
+
+*Owner decision:* "do the same thing that happens in nature". Clear stays dry
+(rain needs cloud). Mist does not shower, because fog forms in calm, stable air
+and showers need instability. What it does do is thicken as the air cools after
+sunset (`mistDensity = 0.35 + 0.65·(1 − daylight)`), thin after sunrise, and,
+when thick (density > 0.65, smoothstep to 0.85), shed a fine **fog drizzle**
+from a `fog` envelope of 0.06–0.15 that is dry half the time. Mist bands follow
+the density. Fog drizzle under 0.2 does not ground insects. Storms are left as
+persistent frontal rain.
 
 `rainIntensity ∈ [0,1]` follows a seeded piecewise-smooth envelope of 45–150 s
 segments: drizzle sessions wander 0.15–0.55, storm sessions 0.35–1.0 with at
@@ -100,6 +109,9 @@ backdrops the key picks petals, sun glitter or dithered sky, so they stay on
 plain grading until painted masks arrive.
 
 ### D4 Palette cycling as cached frames
+
+*Owner decision:* blend by material. Water and bioluminescence blend smoothly.
+Fire (the sanctuary lanterns) steps hard at 7 fps. The scenery has no neon.
 
 A cycle region is a logical-space rectangle with an index map (0 = transparent,
 1..N = ramp slot) and a colour ramp. At load the engine bakes N frames (one
@@ -186,10 +198,27 @@ procedural content, no optional asset yet).
 
 ### D6 Lily pad dynamics
 
+*Owner decision:* every pad roams a **small** area and interacts with the water
+and with the other pads. As implemented:
+
+- **Sections:** ambient sections are reserved at placement (4–10 px, or 2 px for
+  the last tight fits) and checked against every other section and the
+  narrowing far shore. They are no longer grown into the free room. The
+  tightest basins therefore fit 4 ambient pads.
+- **Ripple drift:** passing ripple crests add Stokes drift to the slow slide
+  (`10·strength`). A pad ignores ripples centred on its own body.
+- **Koi:** wakes push along the fish's heading (`4·wake`).
+- **Pad wakes:** a pad sliding faster than 2.5 px/s sheds a faint wake ripple
+  every 0.45 s, so one landing nudges the neighbours.
+- **Sleep:** roaming continues while the frogs sleep, and they ride their
+  leaves.
+- **Settling:** after a landing, the slide settles back to ambient roaming
+  below 1 px/s within 3 s.
+
 Layout: one seeded placer (`_fxRandom`) puts hero pad 0 in the left 22–42 % of
 basin width and hero 1 in the right 58–78 %, each at any basin depth with a
 14 px margin and a minimum vertical difference of 0 (depth jumps arise
-naturally); hero base radius 30–40 px, 5–9 ambient pads with 9.5–21 px base
+naturally); hero base radius 30–40 px, 4–9 ambient pads (4 only in the tightest basins) with 9.5–21 px base
 radius. Each pad owns a circular section (hero 10–14 px, ambient 22–30 px)
 around its home; sections and pads never overlap.
 

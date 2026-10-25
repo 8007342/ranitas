@@ -37,7 +37,8 @@ for that backdrop. Missing masks SHALL fall back to plain grading.
 
 Waterfalls, streams and glows SHALL be able to animate by cycling a colour ramp
 through an index map, in the manner of 1990s scenery. Each region SHALL declare
-its ramp, frame rate and whether frames blend smoothly or step. Index maps MAY
+its ramp, frame rate and whether frames blend smoothly or step, chosen by
+material: water and bioluminescence blend smoothly, fire steps hard. Index maps MAY
 be procedural or painted. Reduced motion SHALL freeze cycling on its first frame.
 
 #### Scenario: Blossom waterfall flows
@@ -85,8 +86,19 @@ optional assets and their exact formats SHALL be documented.
 Within drizzle and storm sessions rain SHALL vary continuously through a seeded
 intensity envelope, including lulls and, in storms, at least one downpour.
 Intensity SHALL drive drop density, streak length, impact ripples, cloud
-darkening and insect shelter. Clear and mist sessions SHALL remain dry. Rain
-SHALL never produce lightning or flashes.
+darkening and insect shelter. Weather SHALL follow nature: clear sessions stay
+dry (rain needs cloud); mist never produces showers (fog forms in stable air),
+but its fog SHALL thicken as daylight fades and thin as it returns, and thick
+fog MAY shed a fine fog drizzle no stronger than 0.15. Rain SHALL never produce
+lightning or flashes.
+
+#### Scenario: Fog drizzle at night
+
+- **GIVEN** a mist session
+- **WHEN** daylight is 1
+- **THEN** the fog is thin and no drizzle falls
+- **WHEN** daylight approaches 0
+- **THEN** the fog is thick and fine drizzle may come and go, never above intensity 0.15.
 
 #### Scenario: A storm breathes
 

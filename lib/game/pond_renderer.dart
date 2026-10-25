@@ -1144,7 +1144,12 @@ class PondRenderer {
           240 + d.z * 180,
           3 + d.w * 6,
           0xffb7cdd0,
-          mistFog ? .055 : .035 * heavyFog,
+          // Mist bands follow the fog's density: thicker toward night.
+          m.weather == 'mist'
+              ? .03 + .05 * m.mistDensity
+              : mistFog
+              ? .055
+              : .035 * heavyFog,
         );
       }
     }

@@ -151,6 +151,8 @@ class CycleSpec {
   final double fps;
 
   /// Cross-fade to the next shift (Ferrari) instead of stepping hard (8-bit).
+  /// By material: water and bioluminescence flow smoothly (true); fire
+  /// flickers in hard steps (false).
   final bool blend;
 
   /// The region is a light source; the grade pass may keep it lit at night.
@@ -441,7 +443,9 @@ class PaletteCycles {
             rect: const ui.Rect.fromLTWH(88, 152, 48, 32),
             ramp: _glow(jade ? 0xffe15c : 0xf0bb59, .36),
             generator: IndexMaps.radialPulse(rings: 1),
-            fps: 5,
+            // Candle flame: hard-stepped flicker, unlike the flowing water.
+            fps: 7,
+            blend: false,
             emissive: true,
             additive: true,
             seed: 41,

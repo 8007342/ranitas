@@ -210,9 +210,6 @@ void main() {
         isTrue,
       );
       final positions = p.frogs.map((f) => [f.x, f.y, f.leafIndex]).toList();
-      final padPositions = [
-        for (final pad in [...p.pads, ...p.ambientPads]) [pad.x, pad.y],
-      ];
       final elapsed = p.elapsed;
       final ai = p.aiEvaluations;
       final endpoint = p.daylight;
@@ -233,12 +230,14 @@ void main() {
         expect(p.elapsed, elapsed);
         expect(p.aiEvaluations, ai);
         expect(p.daylight, endpoint);
-        expect(p.frogs.map((f) => [f.x, f.y, f.leafIndex]).toList(), positions);
-        // Slow pad drift freezes while the frogs sleep.
-        expect(
-          [for (final pad in [...p.pads, ...p.ambientPads]) [pad.x, pad.y]],
-          padPositions,
-        );
+        // Pads keep roaming their sections after sleep; each sleeping frog
+        // rides its own leaf at a fixed perch offset.
+        for (final f in p.frogs) {
+          expect(f.leafIndex, positions[f.index][2]);
+          final pad = p.pads[f.leafIndex];
+          expect(f.x - pad.x, closeTo(f.perchDx, 1e-9));
+          expect(f.y - pad.y, closeTo(f.perchDy, 1e-9));
+        }
       }
     }
     // Print measured maxima even if a contract assertion below fails.

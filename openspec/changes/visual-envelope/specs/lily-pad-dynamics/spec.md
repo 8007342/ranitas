@@ -2,7 +2,7 @@
 
 ### Requirement: Seeded varied pad layout
 
-Each world SHALL place its two hero pads and five to nine ambient pads from its
+Each world SHALL place its two hero pads and four to nine ambient pads from its
 seed, with varied sizes and positions inside the water basin. Hero pad 0 SHALL
 sit in the left part of the basin and hero pad 1 in the right part. Pads SHALL
 not overlap. Repeating a seed SHALL reproduce the layout.
@@ -15,17 +15,25 @@ not overlap. Repeating a seed SHALL reproduce the layout.
 
 ### Requirement: Bounded, momentum-driven pad drift
 
-Pads SHALL slide in response to frog takeoff and landing, conserving a plausible
-share of the frog's horizontal momentum, then slow under water drag. They SHALL
-wander gently on a smooth current and stay inside a bounded section around
-their home. Pad motion SHALL stop while the frogs sleep, except for gentle bob.
+Every pad, hero or ambient, SHALL roam a small bounded section around its
+home. Pads SHALL slide in response to frog takeoff and landing, conserving a
+plausible share of the frog's horizontal momentum, then slow under water drag.
+Passing ripples, koi wakes and the faint wakes of other sliding pads SHALL
+nudge them, and they SHALL wander gently on a smooth current. Roaming SHALL
+continue while the frogs sleep, carrying the sleeping frogs with their leaves.
 
 #### Scenario: Landing slide
 
 - **WHEN** a frog lands on a hero pad after a sideways jump
 - **THEN** the pad slides 3–12 px in the jump's direction
-- **AND** its slide speed falls below 0.1 px/s within 3 s
+- **AND** within 3 s its slide speed returns to gentle ambient roaming below 1 px/s
 - **AND** it never leaves its section.
+
+#### Scenario: One landing nudges the neighbours
+
+- **WHEN** a landing makes a pad slide faster than 2.5 px/s
+- **THEN** the pad sheds faint wake ripples that carry nearby pads a little
+- **AND** a pad is never carried by ripples centred on its own body.
 
 #### Scenario: Long session stays bounded
 

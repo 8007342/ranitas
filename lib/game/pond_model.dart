@@ -34,7 +34,7 @@ class PondModel {
     period = cycle == 'dawn' ? 'night' : 'day';
     // Own seeded stream: sampling it never shifts the main draw order above.
     _rainEnvelope = RainEnvelope(seed: sceneSeed, weather: weather);
-    rainIntensity = _rainEnvelope.at(0);
+    rainIntensity = _rainAt(0);
 
     // Biome-specific open-water basin so hero pads, ambient floating leaves,
     // Koi fish, and rain impacts always rest on water and never on shore rocks.
@@ -157,12 +157,24 @@ class PondModel {
 
   late final RainEnvelope _rainEnvelope;
 
+  double _rainAt(double t) => weather == 'mist'
+      ? _rainEnvelope.at(t) * RainEnvelope.fogDrizzleGate(mistDensity)
+      : _rainEnvelope.at(t);
+
   /// Current rain intensity in `[0, 1]`: a seeded envelope inside drizzle and
-  /// storm sessions (design D1), always zero in clear and mist. Updated every
+  /// storm sessions (design D1), fine fog drizzle (at most 0.15) when a mist
+  /// session's fog is thick, and always zero in clear weather. Updated every
   /// tick; it keeps evolving after sleep.
   double rainIntensity = 0;
 
-  bool get raining => weather == 'drizzle' || weather == 'storm';
+  /// Fog density for mist sessions (0 otherwise): thickens toward night.
+  double get mistDensity =>
+      weather == 'mist' ? RainEnvelope.mistDensityFor(daylight) : 0.0;
+
+  bool get raining =>
+      weather == 'drizzle' ||
+      weather == 'storm' ||
+      (weather == 'mist' && rainIntensity > 0);
 
   /// Cloud darkening for the scene grade, from the rain intensity.
   double get cloudDarkening => RainEnvelope.cloudFor(rainIntensity);
@@ -210,6 +222,20 @@ class PondModel {
   static const double _currentTimeScale = 25;
   static const double _landingHoming = 6.0;
 
+  /// Every pad roams a small area: ambient placement reserves at least this
+  /// much drift room (the final section can only shrink near the far shore).
+  static const double _minSection = 4.0;
+
+  /// Passing waves carry floating leaves a little way (Stokes drift), and koi
+  /// wakes push pads along their heading: both feed the slow slide.
+  static const double _rippleDriftK = 10.0;
+  static const double _koiDriftK = 4.0;
+
+  /// A pad sliding faster than this sheds a faint wake ripple, so one landing
+  /// can nudge its neighbours in turn.
+  static const double _wakeSpeed = 2.5;
+  static const double _wakeInterval = .45;
+
   /// Shared perspective law for pads, frogs and stems: `0.56` at the far shore
   /// and `1.04` at the near rim of the water basin.
   double perspectiveAt(double yPx) => basin.perspectiveAt(yPx);
@@ -238,13 +264,6 @@ class PondModel {
     final gapY =
         dy - (a.radiusY + a.sectionRadius) - (b.radiusY + b.sectionRadius) - 2;
     return max(gapX, gapY);
-  }
-
-  /// Free room between two pads' bodies (no sections), on the freer axis.
-  static double _bodyGap(PadState a, PadState b) {
-    final dx = (a.x - b.x).abs() * 641;
-    final dy = (a.y - b.y).abs() * 359;
-    return max(dx - a.radiusX - b.radiusX - 2, dy - a.radiusY - b.radiusY - 2);
   }
 
   /// Basin-limited room for a pad to drift in any direction from its home.
@@ -314,20 +333,22 @@ class PondModel {
     ];
   }
 
-  /// Five to nine ambient leaves placed clear of the hero sections. Each one's
-  /// drift section is then shrunk to the free room around it, so sections never
+  /// Four to nine ambient leaves placed clear of the hero sections. Each keeps
+  /// the small drift section it was placed with (4–10 px, 2 px for the last
+  /// tight fits), checked against every other section, so sections never
   /// overlap and pads inside their sections can never touch.
   List<PadState> _generateAmbientPads() {
     final result = <PadState>[];
     final count = 5 + _fxRandom.nextInt(5);
-    final nominal = <PadState, double>{};
 
     for (var i = 0; i < count; i++) {
       var placed = false;
-      for (var attempt = 0; attempt < 240 && !placed; attempt++) {
+      for (var attempt = 0; attempt < 400 && !placed; attempt++) {
         // Ask for generous drift room first, then relax when the basin is
         // tight, and finally fall back to small leaves for the last slots.
-        final allowance = max(0.0, 10.0 - attempt * .1);
+        final allowance = attempt < 160
+            ? max(_minSection, 10.0 - attempt * .1)
+            : 2.0;
         final yn = .06 + _fxRandom.nextDouble() * .88;
         final py = basin.topY + yn * (basin.bottomY - basin.topY);
         final baseRx =
@@ -348,27 +369,21 @@ class PondModel {
           phase: _fxRandom.nextDouble() * pi * 2,
         );
         projectPad(candidate);
-        if (py - candidate.radiusY < basin.topY + 2 ||
-            py + candidate.radiusY > basin.bottomY - 2) {
+        if (py - candidate.radiusY - allowance < basin.topY + 2 ||
+            py + candidate.radiusY + allowance > basin.bottomY - 2 ||
+            _basinRoom(candidate) < allowance) {
           continue;
         }
         if (pads.any((hero) => _sweptGap(candidate, hero) < 0)) continue;
         if (result.any((other) => _sweptGap(candidate, other) < 0)) continue;
-        nominal[candidate] = 22 + _fxRandom.nextDouble() * 8;
         result.add(candidate);
         placed = true;
       }
     }
 
     for (final pad in result) {
-      var section = min(nominal[pad]!, _basinRoom(pad));
-      for (final hero in pads) {
-        section = min(section, _bodyGap(pad, hero) - hero.sectionRadius);
-      }
-      for (final other in result) {
-        if (other != pad) section = min(section, _bodyGap(pad, other) / 2);
-      }
-      pad.sectionRadius = max(1.0, section);
+      // Only the narrowing far shore can still trim a section.
+      pad.sectionRadius = max(1.0, min(pad.sectionRadius, _basinRoom(pad)));
     }
     result.sort((a, b) => a.y.compareTo(b.y));
     return result;
@@ -447,6 +462,26 @@ class PondModel {
     pad.vy += .7 * jy;
     pad.driftVelocity += .3 * jx;
     pad.floatVelocity += .3 * jy;
+  }
+
+  /// A sliding pad pushes a faint bow wave ahead of it; the ripple then
+  /// carries its neighbours a little (see the ripple drift above).
+  void _padWake(PadState pad, double dt) {
+    pad.wakeClock = max(0.0, pad.wakeClock - dt);
+    final speed = sqrt(pad.vx * pad.vx + pad.vy * pad.vy);
+    if (speed < _wakeSpeed || pad.wakeClock > 0) return;
+    pad.wakeClock = _wakeInterval;
+    final ux = pad.vx / speed;
+    final uy = pad.vy / speed;
+    _emitRipple(
+      x: pad.x * 641 + pad.driftX + ux * pad.radiusX * .8,
+      y: pad.y * 359 + 2 + uy * pad.radiusY * .8,
+      initialRadius: pad.radiusX * .5,
+      maxRadius: pad.radiusX * 1.9,
+      duration: 1.1,
+      intensity: min(.35, .05 * speed),
+      biasX: ux * 4,
+    );
   }
 
   void _slidePad(PadState pad, double dt, List<PadState> allPads) {
@@ -635,7 +670,7 @@ class PondModel {
 
   void _tick(double dt) {
     time += dt;
-    rainIntensity = _rainEnvelope.at(time);
+    rainIntensity = _rainAt(time);
     if (started && !sleeping && !_settling) {
       elapsed += dt;
       engagement *= exp(-dt / 18);
@@ -1305,6 +1340,14 @@ class PondModel {
           if (pad.isAmbient) {
             pad.floatVelocity += (dy / dist) * 4.5 * waveStrength * dt;
           }
+          // Stokes drift: the crest leaves the pad slightly further out. A
+          // pad is not carried by waves it made itself (centre on its body).
+          final ox = (r.x - padPxX) / pad.radiusX;
+          final oy = (r.y - padPxY) / max(1.0, pad.radiusY);
+          if (ox * ox + oy * oy > 1.2) {
+            pad.vx += (dx / dist) * _rippleDriftK * waveStrength * dt;
+            pad.vy += (dy / dist) * .34 * _rippleDriftK * waveStrength * dt;
+          }
         }
       }
 
@@ -1325,6 +1368,8 @@ class PondModel {
           }
           pad.tiltVelocity += cos(k.heading) * 7.5 * wake * dt;
           pad.dipVelocity += 6.0 * wake * dt;
+          pad.vx += cos(k.heading) * _koiDriftK * wake * dt;
+          pad.vy += sin(k.heading) * .5 * _koiDriftK * wake * dt;
         }
       }
 
@@ -1383,17 +1428,11 @@ class PondModel {
     }
 
     // 5. Slow slide, current and section walls on top of the fast springs.
-    //    Frozen while the frogs sleep so the final scene holds still.
-    if (!sleeping) {
-      for (final pad in allPads) {
-        _slidePad(pad, dt, allPads);
-      }
-    } else {
-      for (final pad in allPads) {
-        pad.vx = 0;
-        pad.vy = 0;
-        pad.yawVelocity = 0;
-      }
+    //    Every pad keeps roaming its small section, during sleep too: the
+    //    sleeping frogs ride their leaves while the pond lives on.
+    for (final pad in allPads) {
+      _slidePad(pad, dt, allPads);
+      _padWake(pad, dt);
     }
     _rideFrogs();
   }
@@ -1856,6 +1895,9 @@ class PadState {
   /// top) and visual yaw (rotates veins and lotus only).
   double vx = 0, vy = 0;
   double yaw = 0, yawVelocity = 0;
+
+  /// Seconds until this pad may shed another wake ripple.
+  double wakeClock = 0;
 
   /// Unprojected radius; [radiusX]/[radiusY] follow the perspective each tick.
   final double baseRx;

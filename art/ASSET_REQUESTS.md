@@ -145,9 +145,25 @@ map named for any of those backdrops and regions replaces the procedural one.
 
 Until a painted map exists, procedural regions approximate these features.
 
-## 7. Not yet wired (wanted later)
+## 7. Regenerations (approved 2026-10-25)
+
+The owner approved regenerating existing assets wherever it improves the
+result.
+
+- `frog-meadow-sheet.png` and `frog-teal-sheet.png`: repaint the same 8 poses
+  on a **true 42×36 pixel grid** per cell, with hard edges, no anti-aliasing,
+  and the styleguide palette only. Scale each cell up by a whole number inside
+  the 1031×521 sheet. This stops the shimmer when frogs scale with depth, and
+  it lets the depth sheets in §1 match.
+- Backdrops whose glow masks didn't key cleanly (`pond-blossom`, `pond-maple`,
+  `pond-lotus`, `pond-alpine`, `pond-mist`, `pond-autumn-mist`): no repaint
+  needed. A painted `emissive-*.png` (§5) is enough.
+- Backdrop re-exports at a whole-number scale are **on hold** until the owner
+  decides; see "Prime sizes and pixel scaling" in `docs/visual-envelope.md`.
+
+## 8. Not yet wired (wanted later)
 
 - `insects-night-sheet.png`: moth, mayfly and glow-beetle wing frames (8×8
   effective pixels, 4 frames each). Insects are currently drawn procedurally.
-- Integer-scaled re-exports of every backdrop at 2752 × 1536 (2 × 1376 × 768),
-  so every source pixel maps to a whole number of screen pixels.
+- Whole-number re-exports of every backdrop (e.g. 2752 × 1536 = 2 × 1376 × 768).
+  On hold pending the owner's decision; see §7.

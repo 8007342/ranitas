@@ -1,7 +1,8 @@
 import 'dart:math';
 
-/// Seeded, piecewise-smooth rain intensity for drizzle and storm sessions
-/// (design D1 of the visual-envelope change).
+/// Seeded, piecewise-smooth rain intensity for drizzle and storm sessions,
+/// and the fine fog drizzle of mist sessions (design D1 of the
+/// visual-envelope change).
 ///
 /// The envelope is a pure function of `(seed, weather, time)`: it owns its own
 /// `Random` stream, so sampling it never disturbs the model's main draw order,
@@ -16,6 +17,8 @@ class RainEnvelope {
           ? 'storm'
           : weather == 'drizzle'
           ? 'drizzle'
+          : weather == 'mist'
+          ? 'fog'
           : 'dry',
       _random = Random(seed ^ 0x2e7a9d1b) {
     if (kind == 'dry') return;
@@ -23,11 +26,13 @@ class RainEnvelope {
     _values.add(
       kind == 'storm'
           ? _range(stormStartMin, stormStartMax)
+          : kind == 'fog'
+          ? 0
           : _range(drizzleStartMin, drizzleStartMax),
     );
   }
 
-  /// `storm`, `drizzle` or `dry` (clear and mist never rain).
+  /// `storm`, `drizzle`, `fog` (mist) or `dry` (clear never rains).
   final String kind;
   final Random _random;
   final List<double> _times = [];
@@ -55,6 +60,11 @@ class RainEnvelope {
   static const double drizzleHighMin = .35;
   static const double drizzleHighMax = .55;
 
+  /// Fog drizzle: thick fog sheds a very fine drizzle, never showers. Mist
+  /// forms in calm, stable air, the opposite of the instability showers need.
+  static const double fogDrizzleMin = .06;
+  static const double fogDrizzleMax = .15;
+
   bool get isDry => kind == 'dry';
 
   double _range(double lo, double hi) => lo + _random.nextDouble() * (hi - lo);
@@ -79,6 +89,11 @@ class RainEnvelope {
             ? _range(stormDownpourMin, stormDownpourMax)
             : _range(stormHighMin, stormHighMax);
       }
+    } else if (kind == 'fog') {
+      // Fine drizzle comes and goes; half of the segments are dry.
+      next = previous > 0 && roll < .5
+          ? 0
+          : _range(fogDrizzleMin, fogDrizzleMax);
     } else {
       if (previous > .33) {
         next = roll < .2
@@ -129,7 +144,19 @@ class RainEnvelope {
   /// Weather label handed to the ambience (no API change): storm audio only
   /// while the rain is actually heavy.
   static String audioLabel(String weather, double intensity) {
+    if (weather == 'mist') return intensity > 0 ? 'drizzle' : 'mist';
     if (weather != 'drizzle' && weather != 'storm') return weather;
     return intensity >= .6 ? 'storm' : 'drizzle';
+  }
+
+  /// Fog density in `[0, 1]` for a mist session: air cools after sunset, so
+  /// fog thickens toward night and burns off as daylight returns.
+  static double mistDensityFor(double daylight) =>
+      .35 + .65 * (1 - daylight.clamp(0.0, 1.0));
+
+  /// Fog drizzle only falls from thick fog (density above ~0.65).
+  static double fogDrizzleGate(double mistDensity) {
+    final g = ((mistDensity - .65) / .2).clamp(0.0, 1.0);
+    return g * g * (3 - 2 * g);
   }
 }

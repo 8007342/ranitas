@@ -319,7 +319,16 @@ void main() {
         expect(model.period, cycle == 'dawn' ? 'day' : 'night');
         expect(model.daylight, cycle == 'dawn' ? 1 : 0);
         expect(model.weather, weather);
-        expect(model.frogs.map((f) => [f.x, f.y]).toList(), positions);
+        // Sleeping frogs stay on their own leaves, riding its gentle roam.
+        for (final f in model.frogs) {
+          final pad = model.pads[f.leafIndex];
+          expect(f.x - pad.x, closeTo(f.perchDx, 1e-9));
+          expect(f.y - pad.y, closeTo(f.perchDy, 1e-9));
+          expect(
+            (f.x - positions[f.index][0]).abs() * 641,
+            lessThan(2 * pad.sectionRadius + 1),
+          );
+        }
         expect(
           model.frogs.every((f) => f.asleep && f.leafIndex == f.index),
           isTrue,

@@ -25,7 +25,9 @@ class HabitatContext {
   final String weather;
   final double rainIntensity;
 
-  bool get dry => weather == 'clear' || weather == 'mist';
+  /// Fog drizzle is too fine to ground insects; only real rain does.
+  bool get dry =>
+      weather == 'clear' || (weather == 'mist' && rainIntensity < .2);
 
   /// The original daytime predicate, unchanged.
   bool get light => period == 'day' || (period == 'dawn' && progress >= .55);

@@ -8,7 +8,8 @@ The scene SHALL choose one of its twelve biomes (`willow`, `blossom`,
 probability and coherent palette/vegetation. Persistent weather SHALL be clear
 50%, mist 30%, drizzle 15% or storm 5%. Within drizzle and storm, rain
 intensity SHALL vary through a seeded envelope without changing the weather
-kind. Gusts SHALL vary wind without replacing that weather. Storm SHALL permit
+kind; mist SHALL thicken toward night and MAY shed fine fog drizzle, but never
+showers; clear SHALL stay dry. Gusts SHALL vary wind without replacing that weather. Storm SHALL permit
 quiet distant thunder, expressly without lightning flashes. Artful
 weather/species rules SHALL NOT be presented as biological validation.
 

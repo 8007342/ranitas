@@ -64,14 +64,20 @@ void main() {
       }
     });
 
-    test('clear and mist sessions are dry; rain never flashes', () {
-      for (final weather in ['clear', 'mist']) {
-        final env = RainEnvelope(seed: 7, weather: weather);
-        expect(env.isDry, isTrue);
-        for (var t = 0.0; t < 600; t += 7.3) {
-          expect(env.at(t), 0);
-        }
+    test('clear sessions are dry; mist only sheds fine fog drizzle', () {
+      final clear = RainEnvelope(seed: 7, weather: 'clear');
+      expect(clear.isDry, isTrue);
+      for (var t = 0.0; t < 600; t += 7.3) {
+        expect(clear.at(t), 0);
       }
+      final fog = RainEnvelope(seed: 7, weather: 'mist');
+      for (var t = 0.0; t < 600; t += 7.3) {
+        expect(fog.at(t), lessThanOrEqualTo(RainEnvelope.fogDrizzleMax));
+      }
+      // Fog thickens toward night and only thick fog drizzles.
+      expect(RainEnvelope.mistDensityFor(1), lessThan(RainEnvelope.mistDensityFor(0)));
+      expect(RainEnvelope.fogDrizzleGate(RainEnvelope.mistDensityFor(1)), 0);
+      expect(RainEnvelope.fogDrizzleGate(RainEnvelope.mistDensityFor(0)), 1);
       final dry = _firstWith((m) => m.weather == 'clear');
       dry.press();
       dry.release();
