@@ -5,6 +5,7 @@ import 'package:flame/game.dart';
 
 import '../audio/ambience.dart';
 import '../platform/scene_ready.dart';
+import 'optional_assets.dart';
 import 'pond_model.dart';
 import 'pond_renderer.dart';
 
@@ -24,6 +25,10 @@ class RanitasGame extends FlameGame {
     renderer.frogSheets = [
       await images.load('frog-meadow-sheet.webp'),
       await images.load('frog-teal-sheet.webp'),
+    ];
+    renderer.frogDepthSheets = [
+      await OptionalAssets.load(images, OptionalAssets.frogDepthSheet(0)),
+      await OptionalAssets.load(images, OptionalAssets.frogDepthSheet(1)),
     ];
     renderer.wildlifeSheet = await images.load('pond-wildlife-sheet.webp');
     foreground = await images.load(model.foregroundAsset);

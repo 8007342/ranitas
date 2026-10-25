@@ -81,4 +81,47 @@ void main() {
       tealSheet.dispose();
     },
   );
+
+  test('away and toward flights render with and without sheets', () async {
+    final meadowSheet = await _loadAssetImage(
+      'assets/images/frog-meadow-sheet.webp',
+    );
+    final tealSheet = await _loadAssetImage('assets/images/frog-teal-sheet.webp');
+    final seenViews = <String>{};
+    for (var seed = 0; seed < 400 && seenViews.length < 2; seed++) {
+      final probe = PondModel(seed: seed);
+      probe.press();
+      probe.release();
+      final frog = probe.frogs[0];
+      if (frog.view == 'side' || !seenViews.add(frog.view)) continue;
+      // Render launch, ascent and descent with the procedural fallback, the
+      // side sheets (depth poses still procedural) and a stand-in depth sheet.
+      for (final phase in [.05, .3, .7]) {
+        while (frog.airborne && frog.jumpPhase < phase) {
+          probe.update(1 / 60);
+        }
+        expect(frog.viewPose(frog.currentPose()), startsWith(frog.view));
+        for (final sheets in [
+          (<ui.Image?>[null, null], <ui.Image?>[null, null]),
+          ([meadowSheet, tealSheet], <ui.Image?>[null, null]),
+          ([meadowSheet, tealSheet], [meadowSheet, tealSheet]),
+        ]) {
+          final renderer = PondRenderer()
+            ..frogSheets = sheets.$1
+            ..frogDepthSheets = sheets.$2;
+          final recorder = ui.PictureRecorder();
+          renderer.render(ui.Canvas(recorder), const ui.Size(641, 359), probe);
+          final picture = recorder.endRecording();
+          final image = await picture.toImage(641, 359);
+          expect(image.width, 641);
+          image.dispose();
+          picture.dispose();
+          renderer.dispose();
+        }
+      }
+    }
+    expect(seenViews, {'away', 'toward'});
+    meadowSheet.dispose();
+    tealSheet.dispose();
+  });
 }

@@ -40,9 +40,12 @@ void main() {
     expect(model.aiEvaluations, 0);
     expect(model.bugs, isEmpty);
     for (final frog in model.frogs) {
+      // Frogs ride their drifting home pads from the pad centre.
       expect(frog.airborne, isFalse);
-      expect(frog.x, frog.homeX);
-      expect(frog.y, frog.homeY);
+      expect(frog.perchDx, 0);
+      expect(frog.perchDy, 0);
+      expect(frog.x, closeTo(model.pads[frog.index].x, 1e-9));
+      expect(frog.y, closeTo(model.pads[frog.index].y, 1e-9));
     }
   });
 
@@ -70,7 +73,7 @@ void main() {
       model.update(1.4);
       expect(model.frogs[0].leafIndex, 1);
       final frog = model.frogs[0];
-      final expectedX = model.pads[1].x - .045;
+      final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final offset = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(offset, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
@@ -144,8 +147,8 @@ void main() {
       expect(model.progress, 1);
       for (final frog in model.frogs) {
         expect(frog.leafIndex, frog.index);
-        expect(frog.x, closeTo(frog.homeX, .015));
-        expect(frog.y, closeTo(frog.homeY, .015));
+        expect(frog.x, closeTo(model.pads[frog.index].x, .015));
+        expect(frog.y, closeTo(model.pads[frog.index].y, .015));
         expect(frog.swimming || frog.airborne, isFalse);
       }
       final elapsed = model.elapsed;
@@ -234,8 +237,9 @@ void main() {
       model.update(.15);
       expect(frog.currentPose(charging: model.pressing), 'charging');
       // Place a live bug along frog 0's low jump arc so it chomps mid-flight
-      final midX = (model.pads[0].x + model.pads[1].x - .045) * .5;
-      final midY = (model.pads[0].y + model.pads[1].y) * .5 - .29;
+      final midX =
+          (model.pads[0].x + model.pads[1].x + model.perchOffsetX(0, 1)) * .5;
+      final midY = (model.pads[0].y + model.pads[1].y) * .5 - .26;
       model.bugs.add(
         BugState(
           x: midX,
@@ -370,7 +374,7 @@ void main() {
         expect((frog.x - x).abs(), lessThan(.02));
         expect((frog.y - y).abs(), lessThan(.02));
       }
-      final expectedX = model.pads[1].x - .045;
+      final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final radius = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(radius, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
@@ -387,7 +391,7 @@ void main() {
         (seed) => PondModel(seed: seed),
       ).firstWhere((m) => m.weather == 'drizzle' || m.weather == 'storm');
 
-      expect(rainyModel.ambientPads.length, inInclusiveRange(5, 8));
+      expect(rainyModel.ambientPads.length, inInclusiveRange(5, 9));
       expect(rainyModel.raindrops, isNotEmpty);
 
       for (final p in [...rainyModel.pads, ...rainyModel.ambientPads]) {
