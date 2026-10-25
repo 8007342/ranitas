@@ -53,6 +53,15 @@ class RanitasGame extends FlameGame {
           OptionalAssets.foreground(model.biome),
         ) ??
         await images.load(model.foregroundAsset);
+    layers.foliage.paintedAtlas = await OptionalAssets.load(
+      images,
+      OptionalAssets.foliage(model.biome),
+    );
+    layers.foliage.branchStrip = await OptionalAssets.load(
+      images,
+      OptionalAssets.branches(model.biome),
+    );
+    await layers.foliage.prepare(model.biome);
     cycles = await PaletteCycles.load(model.backdropAsset, images);
     renderer.cycles = cycles;
     sceneReady();

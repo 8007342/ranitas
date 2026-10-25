@@ -162,6 +162,8 @@ void main() {
         expect(renderer.layers.canopyImage, isNull);
         expect(renderer.layers.midBankImage, isNull);
         expect(renderer.layers.foregroundImage, isNull);
+        expect(renderer.layers.foliage.paintedAtlas, isNull);
+        await renderer.layers.foliage.prepare(biome);
         for (final reduced in [false, true]) {
           renderer.reducedMotion = reduced;
           for (var frame = 0; frame < 3; frame++) {

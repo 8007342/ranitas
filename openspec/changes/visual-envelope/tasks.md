@@ -39,6 +39,16 @@
 - [x] 6.4 Whole-number scenic re-export (2752 × 1536) and regenerated emissive masks
 - [x] 6.5 Depth-aware JEV prior (12→16→3) retrained, plus patience when nothing is in reach
 
+## 7. Foliage, more cycles, glow at night (branch `work/pond-foliage`, 2026-10-25)
+
+- [x] 7.1 Research cheap, convincing 2D foliage animation; write it up (docs/visual-envelope.md "Foliage animation")
+- [x] 7.2 Procedural leaf-sprite atlas per biome (`LeafAtlas`), baked once, drawn with `drawRawAtlas`; optional painted `foliage-<biome>.webp`
+- [x] 7.3 Branch chains from the top corners with wind-trace lag, bounded lean and leaf packs; optional painted `branches-<biome>.webp` strip
+- [x] 7.4 Mid-bank and near-corner bushes with ground-anchored shear, baked bodies, atlas leaves, grotto glow flecks
+- [x] 7.5 New palette-cycle regions: grotto shimmer, every fungus cluster, moon, evening stars, sunset/alpenglow/fog glitter (`glints` generator)
+- [x] 7.6 Emissive masks regenerated so lanterns, fungi, moon and fireflies are lit; maskless backdrops get additive star regions
+- [x] 7.7 Tests: clear-lane bound and poses, atlas determinism, reduced-motion freeze, wind trace, cycle periodicity for every region, render smoke with and without optional images
+
 ## 5. Integration (branch `work/visual-envelope`)
 
 - [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean

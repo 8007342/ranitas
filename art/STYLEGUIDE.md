@@ -99,6 +99,12 @@ procedural fallback draws instead.
 - **Layer stack** (`lib/game/scene_layers.dart`): far bank, mid bank, canopy,
   near corner and particle slots per biome. The canopy hangs from the top edge
   and keeps the central 50 % of the width clear below 30 % of the height.
+- **Animated foliage** (`lib/game/foliage.dart`): a per-biome leaf atlas
+  (procedural, or `foliage-<biome>.webp`) drawn as instanced sprites; branch
+  chains from the top corners that lean with a lagged wind trace; bushes on
+  the far shores and in the near corners that sway from the ground. Leaves
+  flutter by size and flash a lit frame in moving air. Branches never enter
+  the central lane.
 - **Rain envelope and night insects** (`lib/game/rain_envelope.dart`,
   `lib/game/insect_species.dart`).
 - **Pads and frog depth** (`lib/game/pond_model.dart`,

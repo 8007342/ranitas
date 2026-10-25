@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'foliage.dart';
 import 'pond_model.dart';
 import 'scene_grade.dart';
 
@@ -328,7 +329,8 @@ class CanopyGeometry {
             SceneLayers.laneLeft -
                 12 +
                 f * (SceneLayers.laneRight - SceneLayers.laneLeft + 24),
-            -12 + 4 * (1 - math.cos(f * math.pi * 2 + random.nextDouble() * .4)),
+            -12 +
+                4 * (1 - math.cos(f * math.pi * 2 + random.nextDouble() * .4)),
           ),
         );
       }
@@ -660,7 +662,7 @@ class CanopyGeometry {
           perCluster: 1,
           variant: 7,
         );
-        // Alpine keeps the top centre open sky: pine tufts only at the sides.
+      // Alpine keeps the top centre open sky: pine tufts only at the sides.
     }
     return CanopyModel(
       kind: kind,
@@ -680,6 +682,14 @@ class SceneLayerPainter {
   ui.Image? midBankImage;
   ui.Image? foregroundImage;
   bool reducedMotion = false;
+
+  /// Animated branches and bushes (`foliage.dart`), drawn after the canopy,
+  /// after the mid bank and after the near corner. Call `foliage.prepare`
+  /// once per biome so its atlas exists.
+  final FoliagePainter foliage = FoliagePainter();
+
+  /// Richness at which the foliage starts to fade in, like a canopy layer.
+  static const double foliageRevealAt = .2;
 
   static const double _width = 641;
   static const double _height = 359;
@@ -781,6 +791,50 @@ class SceneLayerPainter {
         case LayerSlot.particles:
           _particles(c, m, layer, motion);
       }
+    }
+    _foliage(c, m, slot);
+  }
+
+  /// Foliage per slot: it belongs to every biome, whether or not the stack
+  /// declares a layer in that slot, so it runs after the declared layers.
+  void _foliage(ui.Canvas c, PondModel m, LayerSlot slot) {
+    foliage.reducedMotion = reducedMotion;
+    final reveal = ((m.richness - foliageRevealAt) / .25).clamp(0.0, 1.0);
+    if (reveal <= 0) return;
+    final grade = tintFor(m);
+    switch (slot) {
+      case LayerSlot.midBank:
+        foliage.observe(m);
+        foliage.drawBushes(
+          c,
+          m,
+          reveal,
+          _breath(m, const SceneLayer(slot: LayerSlot.midBank, depth: .35)),
+          grade,
+          near: false,
+        );
+      case LayerSlot.canopy:
+        foliage.observe(m);
+        foliage.drawBranches(
+          c,
+          m,
+          reveal,
+          _breath(m, const SceneLayer(slot: LayerSlot.canopy, depth: .8)),
+          grade,
+        );
+      case LayerSlot.nearCorner:
+        foliage.observe(m);
+        foliage.drawBushes(
+          c,
+          m,
+          reveal,
+          _breath(m, const SceneLayer(slot: LayerSlot.nearCorner, depth: 1)),
+          grade,
+          near: true,
+        );
+      case LayerSlot.farBank:
+      case LayerSlot.particles:
+        break;
     }
   }
 
@@ -1483,6 +1537,7 @@ class SceneLayerPainter {
 
   void dispose() {
     _clearFrames();
+    foliage.dispose();
     _canopy = null;
     _canopyKey = null;
     _sparks = const [];
