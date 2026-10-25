@@ -69,3 +69,11 @@
 - [x] 9.2 Signature insect species per scenery (12 new, all catchable, procedural sprites), common-species absences, all-weather residents
 - [x] 9.3 Species-linked ambient voices (cricket, katydid, bee, cicada) gated on on-screen presence; per-species presence string from the model
 - [x] 9.4 Tests: signature availability and absences per biome, resident coverage, presence string, partition determinism, sprite smoke; Node tests for the pure thunder plan (`npm run test:ambience`)
+
+## 10. Generated asset delivery
+
+- [x] 10.1 Regenerate both side-view frog sheets on a hard pixel grid and add matching front/back depth sheets
+- [x] 10.2 Deliver canopy, mid-bank, foreground, foliage atlas and branch strip for all twelve biomes
+- [x] 10.3 Retain editable emissive sources, isolate the remaining stars, and export exact cycle lookup textures
+- [x] 10.4 Preserve fixed atlas/map dimensions in the exporter and validate alpha, clear lanes and numeric slots
+- [x] 10.5 Render all twelve biomes with delivered assets; retain fallback coverage

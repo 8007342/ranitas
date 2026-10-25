@@ -1,5 +1,27 @@
 # Asset Requests: Visual Envelope
 
+## Delivery status (2026-10-25)
+
+Sections 1–7 are delivered: both replacement side-view frog sheets, both depth
+sheets, and canopy, foliage atlas, branch strip, mid-bank and foreground art for
+all twelve biomes. PNG sources live in `art/source/`; lossless runtime exports
+live in `assets/images/`. The built-in image generator prompt set and source
+inventory are recorded in [GENERATION.json](GENERATION.json).
+
+All twelve backdrops have editable emissive mask sources. Maple, autumn mist
+and cypress intentionally have empty masks because their paintings contain no
+light sources. Blossom, lotus and alpine use locally isolated star masks;
+the existing six keyed masks retain their lantern, fungus and moon coverage.
+The 56 cycle maps are numeric lookup textures exported from the canonical
+region table with `npm run art:cycles`, preserving exact grayscale slots.
+
+Rebuild exports with `npm run art:build`; validate contracts with
+`npm run check:art` and deployment limits with `npm run check:assets`.
+`scripts/import-generated-art.mjs` packs generated atlases, enforces hard alpha
+and clear lanes, and quantizes frogs to the styleguide palette. Optional loading
+and procedural fallbacks remain supported. The explicitly unwired future
+requests in section 8 and bonus variants remain future work.
+
 This list is for agents or artists who can paint images. Every asset below is
 **optional**. The game looks for each one by filename in `assets/images/`. If a
 file is missing or fails to decode, the game draws a procedural fallback, so you

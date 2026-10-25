@@ -171,3 +171,89 @@ because nothing better is advertised.
 8. **A Flutter-web screenshot recipe** in `tellme` that uses `publish_local`
    plus the host-browser screenshot tools, so "view it in a browser" is a
    documented one-liner.
+
+## Codex asset completion session — 2026-10-25
+
+### What went well
+
+- The integration branch already contained all six implementation branches.
+  The asset request file, optional filename registry, OpenSpec tasks and
+  procedural fallbacks made the remaining scope discoverable without asking
+  the owner to reconstruct Claude's work.
+- Built-in image generation worked without API credentials. Delivered 64
+  image assets (60 biome layers/atlases, two replacement frog sheets and two
+  depth sheets), retained PNG sources and lossless WebP exports, and recorded
+  the prompt set in `art/GENERATION.json`.
+- The forge's Flutter wrapper provided a working shared SDK. Static analysis,
+  all 89 existing Flutter tests (including the 100-seed soak), nine audio tests,
+  and the upgraded all-biome real-asset rendering test passed.
+- `publish_local` and the host browser worked for Flutter web. The preview
+  route has trusted local TLS; Chromium fetched the optional assets with HTTP
+  200, rendered the pond, accepted a pointer press/release, and reported no
+  application console errors. Headless mode has no speakers, so this verifies
+  audio code and browser execution rather than subjective listening quality.
+- Final release validation: 132 image/data contracts passed; the corrected
+  assets passed all three renderer smoke tests; the production web build
+  contains 181 files totaling 61.16 MiB, with every file below 25 MiB.
+
+### What required figuring out
+
+- `work/visual-envelope` is the integrated implementation;
+  `work/visual-envelope-specs` is its older ancestor, not a second unfinished
+  feature to merge independently. Git ancestry was more reliable than branch
+  names for establishing the scope.
+- The `flutter` executable is a host-toolchain wrapper, not a local SDK.
+  Initial output can be delayed, while long tests continue normally through
+  the returned process session. Polling only the final output avoided
+  mistaking toolchain startup or the soak test for a hang.
+- Image tools return substantial inline data alongside a default saved path.
+  Imagegen's `output_hint` carries the path; browser screenshots carry base64
+  in `structuredContent.data`, even though their content block is text.
+
+### What required fixing
+
+- The existing export script doubled every non-sheet texture. Added distinct
+  handling for fixed-size leaf atlases, branch strips and numeric cycle maps.
+- Generated atlases had uneven row padding. The importer detects occupied
+  row bands and repacks cells before scaling, preventing cross-cell bleeding.
+  It also enforces binary alpha, black RGB under transparent pixels, the clear
+  jump lane, frog palettes, integer enlargement and branch endpoint coverage.
+- Initial mid-bank generations copied overhead branches from scenic
+  references. Regenerated all twelve using ground-object-only prompts without
+  backdrop references. Four foliage generations included lanterns, fungi or
+  crystals instead of leaves; regenerated those with leaf-only prompts.
+- A Sharp pipeline combining extraction and trimming failed with
+  `extract_area: bad extract area`: trim changed the coordinate space. Splitting
+  those into separate buffer operations fixed the importer.
+- Numeric lookup maps are data, not illustrative images. Exported all 56
+  directly from the canonical Dart region table; isolated the remaining stars
+  locally instead of globally keying petals, snow and sky dithering. Scenes
+  without painted light sources intentionally have empty alpha masks.
+
+### What did not work as a one-step operation
+
+- Asking imagegen for exact grids, dimensions and clean scene decomposition
+  was insufficient by itself. Generated art needed inspection, normalization
+  and targeted regeneration before it satisfied the runtime contracts.
+- Printing an entire imagegen result or screenshot text exposes hundreds of
+  thousands of base64 tokens in tool output. The first attempts did this;
+  subsequent calls reported only metadata and rendered image data separately.
+- A ten-request image batch made other tool replies noticeably less responsive.
+  The correction batch used four concurrent requests and concise completion
+  notices. No CLI/API fallback or external image credentials were needed.
+
+### Improvements for the next run
+
+- Expose a small documented image-result schema with saved path, dimensions,
+  alpha status and thumbnail, and keep base64 out of normal text results.
+  Browser screenshots and imagegen should use the same image-content shape.
+- Add asset contracts to handoffs as machine-readable data: filename, required
+  size, cell layout, scale policy, clear regions and whether the file encodes
+  art or numeric data. `npm run check:art` now checks this project's contracts
+  for all 132 delivered image/data assets.
+- Recommend small bounded image batches, early contact-sheet review, and
+  prompts that describe only the objects belonging to a compositing layer.
+  A style reference can unintentionally reintroduce its scene geometry.
+- Advertise the Flutter wrapper and a `publish_local` → `browser_open` →
+  screenshot/console/network recipe in startup tooling guidance. Both worked
+  here and address the browser-validation gap documented in the prior session.

@@ -4,6 +4,14 @@ Generated with the built-in image generation tool for this project. Source PNGs
 are retained in `art/source/`; the Flutter bundle includes lossless/high-res WebP
 exports from `assets/images/`. Rebuild exports with `node scripts/prepare-art.mjs`.
 
+The visual-envelope delivery adds twelve biome-specific canopy, mid-bank,
+foreground, leaf-atlas and branch-strip sets, plus regenerated side-view frogs
+and new depth sheets. See [GENERATION.json](GENERATION.json) for the prompt set
+and [ASSET_REQUESTS.md](ASSET_REQUESTS.md) for delivery details. Validate their
+dimensions, alpha, clear lanes and lookup data with `npm run check:art`.
+Leaf atlases remain 256 × 128, branch strips 576 × 32, and numeric cycle maps
+641 × 359; only scenic layers and emissive masks receive the 2× export.
+
 All exported scenic backdrops (`pond-*.webp`) and foreground parallax overlays
 (`foreground-*.webp`) are **2752 × 1536 pixels**: exactly 2× their 1376 × 768
 sources, so each source pixel is an exact 2 × 2 block. Earlier exports used a

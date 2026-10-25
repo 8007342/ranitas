@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ranitas/game/palette_cycle.dart';
 import 'package:ranitas/game/pond_model.dart';
 import 'package:ranitas/game/pond_renderer.dart';
+import 'package:ranitas/game/optional_assets.dart';
 
 Future<ui.Image> _loadAssetImage(String relativePath) async {
   final bytes = await rootBundle.load(relativePath);
@@ -32,6 +33,10 @@ void main() {
     expect(tealSheet.height, 521);
 
     final seenBiomes = <String>{};
+    final depthSheets = [
+      await _loadAssetImage('assets/images/frog-meadow-depth-sheet.webp'),
+      await _loadAssetImage('assets/images/frog-teal-depth-sheet.webp'),
+    ];
     for (
       var seed = 0;
       seenBiomes.length < PondModel.biomes.length && seed < 100;
@@ -48,16 +53,41 @@ void main() {
 
       final cycles = <PaletteCycle>[];
       for (final spec in PaletteCycles.specsFor(probe.backdropAsset)) {
-        cycles.add(await PaletteCycle.bake(spec));
+        final map = await _loadAssetImage(
+          'assets/images/${OptionalAssets.cycleIndex(probe.backdropAsset, spec.id)}',
+        );
+        cycles.add(await PaletteCycle.bake(spec, painted: map));
+        map.dispose();
       }
       final foreground = await _loadAssetImage(
-        'assets/images/${probe.foregroundAsset}',
+        'assets/images/${OptionalAssets.foreground(probe.biome)}',
+      );
+      final canopy = await _loadAssetImage(
+        'assets/images/${OptionalAssets.canopy(probe.biome)}',
+      );
+      final midbank = await _loadAssetImage(
+        'assets/images/${OptionalAssets.midBank(probe.biome)}',
+      );
+      final leaves = await _loadAssetImage(
+        'assets/images/${OptionalAssets.foliage(probe.biome)}',
+      );
+      final branches = await _loadAssetImage(
+        'assets/images/${OptionalAssets.branches(probe.biome)}',
+      );
+      final mask = await _loadAssetImage(
+        'assets/images/${OptionalAssets.emissive(probe.backdropAsset)}',
       );
       final renderer = PondRenderer()
         ..backdrop = backdrop
         ..frogSheets = [meadowSheet, tealSheet]
+        ..frogDepthSheets = depthSheets
+        ..emissive = mask
         ..cycles = cycles;
       renderer.layers.foregroundImage = foreground;
+      renderer.layers.canopyImage = canopy;
+      renderer.layers.midBankImage = midbank;
+      renderer.layers.foliage.paintedAtlas = leaves;
+      renderer.layers.foliage.branchStrip = branches;
       await renderer.layers.foliage.prepare(probe.biome);
       expect(renderer.layers.foliage.ready, isTrue);
 
@@ -88,6 +118,11 @@ void main() {
         cycle.dispose();
       }
       foreground.dispose();
+      canopy.dispose();
+      midbank.dispose();
+      leaves.dispose();
+      branches.dispose();
+      mask.dispose();
       backdrop.dispose();
     }
     expect(seenBiomes, PondModel.biomes.toSet());
