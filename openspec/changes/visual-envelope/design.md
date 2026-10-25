@@ -111,6 +111,33 @@ pulses) or (b) a painted grayscale `cycle-<backdrop>-<region>.webp` later, read
 with `Image.toByteData`. Shader remapping was rejected (web risk, mushy on
 anti-aliased edges).
 
+**As built (`lib/game/palette_cycle.dart`).** Frames are baked as small
+`ui.Image`s (one per ramp shift, via `decodeImageFromPixels`) rather than
+`Picture`s, so a blended frame is two `drawImageRect` calls with paint alpha
+and no `saveLayer`. Glow regions are *additive* (`BlendMode.plus`, ramps carry
+alpha) and dithered radially, because the painted fungi and lantern cannot be
+masked procedurally; replacing their pixels would also overwrite rock. Painted
+grayscale maps decode `slot = round(gray / 16)` and clamp to the ramp length.
+Cycles draw in Tier 0 right after the backdrop image, before the night wash.
+Region table (logical 641 × 359 coordinates, measured on the 1376 × 768
+sources):
+
+| Backdrop | Region | Rect (x, y, w, h) | Generator | N / fps | Blend |
+| --- | --- | --- | --- | --- | --- |
+| pond-blossom, pond-lotus | `waterfall` | 381, 150, 6, 18 | falling water | 6 / 9 | yes |
+| pond-blossom, pond-lotus | `waterfall-strand` | 377, 153, 2, 14 | falling water | 6 / 9 | yes |
+| pond-blossom, pond-lotus | `reflection` | 382, 169, 7, 15 | ripple bands | 5 / 3 | yes |
+| pond-alpine | `stream` | 200, 186, 240, 4 | ripple bands | 6 / 4 | yes |
+| pond-grotto, pond-crystal-grotto | `seep` | 572, 98, 22, 64 | falling water, density 0.4 | 8 / 6 | yes |
+| pond-grotto, pond-crystal-grotto | `fungi` | 6, 206, 62, 50 | radial pulse, additive, emissive | 8 / 2.5 | yes |
+| pond-grotto, pond-crystal-grotto | `fungi-right` | 564, 190, 66, 46 | radial pulse, additive, emissive | 8 / 2.2 | yes |
+| pond-sanctuary, pond-jade-sanctuary | `lantern` | 88, 152, 48, 32 | radial pulse, additive, emissive | 8 / 5 | yes |
+
+Deviations: the alpine backdrop has no painted melt stream, so `stream` is the
+tarn's far-shore water line (dark teal row under the meadow) lapping sideways.
+pond-dusk, pond-mist, pond-firefly, pond-maple and pond-autumn-mist have no
+water feature or painted light source and declare no regions.
+
 ### D5 Data-driven layer stack
 
 A biome declares `SceneLayer`s in slots: `farBank` (after backdrop, before water
@@ -123,6 +150,39 @@ image when its optional asset loads and otherwise from a procedural generator:
 willow fronds, Spanish moss, vines, wisteria racemes, bamboo leaves, maple
 boughs, stalactites with drips, pine boughs. The foreground draw moves from
 `RanitasGame` into the renderer so it is graded and ordered with the others.
+
+**As built (`lib/game/scene_layers.dart`).** `SceneLayers.stackFor(biome)` is
+the table; `SceneLayerPainter.drawSlot` is called from `PondRenderer.render`
+at farBank (after the sky), midBank (after the water surface), canopy and
+particles (after bugs), nearCorner (after weather). Procedural canopies are
+baked into 16 `Picture`s keyed by sway phase (5.5 s period), invalidated when
+the night or reveal bucket changes; wind is a canvas skew about the top edge
+(`shear = (wind·0.6 + windTell·0.032)·windResponse·depth`, capped at 0.08) so
+the lean grows toward the tip without rebaking. Breathing parallax is
+`±1.5 px × depth` on x (±0.45 on y) over 40 s. Reveal is
+`(richness − revealAt)/0.25`; the foreground keeps its original
+`(richness − 0.12)·0.68` opacity, sway and modulate tint. `tintFor(model)` is
+the single tint helper for painted layers (`_shade` applies the same multiply
+to procedural colours) and is the merge point for `SceneGrade.filterFor`.
+
+Clear-lane rule: `CanopyGeometry` places side elements at least 34 px outside
+the central lane (x 160.25–480.75) and centre elements no deeper than 96 px,
+which covers sway (≤ 7 px), curve (≤ 7 px), shear (≤ 14 px) and breathing;
+`test/scene_layers_test.dart` checks every biome's strands, boughs, clusters
+and lantern over 33 phases, both wind extremes and five seeds.
+
+Particles are a pure function of time (seeded period and phase per particle,
+no model mutation): petals (blossom, lotus; 14), momiji leaves (maple,
+autumn_mist; 12), drips from stalactite tips (grotto, crystal_grotto; 6, 10
+when raining) and spores (grotto, crystal_grotto; 10). They drift with wind and
+end with a four-pixel ripple fade when they land inside the basin. The drifting
+petals, leaves and moss formerly in `_motifs` were folded into this system;
+the sanctuary lantern glow and grotto glow motifs stay. The bamboo canopy
+hangs a paper lantern at x = 592 whose glow flickers live; stalactite glow moss
+and crystals pulse live over the baked rock. Mid-bank procedural art is limited
+to far-shore reeds for willow, cypress and firefly; the other biomes use the
+slot only when `midbank-<biome>.webp` ships. farBank is reserved (no
+procedural content, no optional asset yet).
 
 ### D6 Lily pad dynamics
 

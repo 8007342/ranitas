@@ -5,9 +5,10 @@ This list is for agents or artists who can paint images. Every asset below is
 file is missing or fails to decode, the game draws a procedural fallback, so you
 can deliver them in any order and each one appears as soon as it ships.
 
-The registry of optional filenames lives in code (see
-`lib/game/optional_assets.dart` once `work/pond-layers` lands). Keep this file
-and that registry in sync.
+The registry of optional filenames lives in code
+(`lib/game/optional_assets.dart`); `RanitasGame.onLoad` loads the canopy,
+mid-bank and foreground layers and `PaletteCycles.load` the cycle index maps.
+Keep this file and that registry in sync.
 
 ## Shared rules
 
@@ -135,6 +136,12 @@ the region. Wanted regions:
 | `pond-crystal-grotto` | `seep` | water seep down the rock wall |
 | `pond-grotto` | `fungi` | mushroom glow pulse (radial) |
 | `pond-sanctuary` | `lantern` | lantern flicker (radial) |
+
+The regions wired in code, with their logical rectangles, are listed in the
+design (`openspec/changes/visual-envelope/design.md`, D4). `pond-lotus` shares
+the blossom waterfall regions, `pond-crystal-grotto` the grotto `seep`,
+`fungi` and `fungi-right`, and `pond-jade-sanctuary` the `lantern`; a painted
+map named for any of those backdrops and regions replaces the procedural one.
 
 Until a painted map exists, procedural regions approximate these features.
 

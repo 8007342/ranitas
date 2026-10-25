@@ -15,12 +15,12 @@
 
 ## 3. Layers and palette cycling (branch `work/pond-layers`)
 
-- [ ] 3.1 Optional asset loader with procedural fallback and a single registry of optional filenames
-- [ ] 3.2 Palette-cycle engine (baked frames, blend/step, reduced-motion freeze) with procedural index generators
-- [ ] 3.3 Cycle regions for backdrops with water features (waterfalls, streams) and glows
-- [ ] 3.4 Layer stack with slots, depth-weighted sway, breathing parallax; move foreground into the renderer
-- [ ] 3.5 Procedural canopy generators per biome and particle emitters (petals, leaves, drips, spores)
-- [ ] 3.6 Tests: cycle periodicity, canopy clear-lane rule, optional-asset fallback, render smoke over all biomes
+- [x] 3.1 Optional asset loader with procedural fallback and a single registry of optional filenames
+- [x] 3.2 Palette-cycle engine (baked frames, blend/step, reduced-motion freeze) with procedural index generators
+- [x] 3.3 Cycle regions for backdrops with water features (waterfalls, streams) and glows
+- [x] 3.4 Layer stack with slots, depth-weighted sway, breathing parallax; move foreground into the renderer
+- [x] 3.5 Procedural canopy generators per biome and particle emitters (petals, leaves, drips, spores)
+- [x] 3.6 Tests: cycle periodicity, canopy clear-lane rule, optional-asset fallback, render smoke over all biomes
 
 ## 4. Pads and frog depth (branch `work/pond-pads-depth`)
 

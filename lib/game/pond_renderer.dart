@@ -2,12 +2,15 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'frog_sprites.dart';
+import 'palette_cycle.dart';
 import 'pond_model.dart';
 import 'scene_grade.dart';
+import 'scene_layers.dart';
 
 /// Widescreen pixel pond scenery implementing the 6-Tier Composable Rendering
 /// Architecture (`art/INTERACTION_STYLEGUIDE.md`). The caller retains ownership
-/// of [backdrop], [emissive], [frogSheets], and [wildlifeSheet].
+/// of [backdrop], [emissive], [frogSheets], [wildlifeSheet], the optional
+/// images on [layers] and the baked [cycles].
 class PondRenderer {
   ui.Image? backdrop;
 
@@ -17,6 +20,13 @@ class PondRenderer {
   List<ui.Image?> frogSheets = [null, null];
   ui.Image? wildlifeSheet;
   bool reducedMotion = false;
+
+  /// Data-driven layer stack (design D5); holds the optional canopy, mid-bank
+  /// and foreground images.
+  final SceneLayerPainter layers = SceneLayerPainter();
+
+  /// Palette-cycle regions baked for the current backdrop (design D4).
+  List<PaletteCycle> cycles = const [];
 
   static const double logicalWidth = 641;
   static const double logicalHeight = 359;
@@ -194,6 +204,7 @@ class PondRenderer {
         : .03 + .97 * model.richness.clamp(0.0, 1.0);
     final progress = model.progress.clamp(0.0, 1.0);
     final night = (1 - model.daylight).clamp(0.0, 1.0);
+    layers.reducedMotion = reducedMotion;
     canvas.save();
     canvas.clipRect(ui.Offset.zero & size);
     canvas.scale(size.width / _width, size.height / _height);
@@ -227,10 +238,15 @@ class PondRenderer {
       _paint.colorFilter = null;
       _emissive(canvas, source, sourceRect, frame, model, night);
     }
+    // Palette-cycled waterfalls, streams and glows sit on the graded backdrop.
+    for (final cycle in cycles) {
+      cycle.draw(canvas, t, reducedMotion: reducedMotion, grade: grade);
+    }
     if (model.cycle == 'dawn') {
       _rect(canvas, 0, 0, _width, 185, 0xffffc68e, progress * .12);
     }
     _sky(canvas, model, night);
+    layers.drawSlot(canvas, LayerSlot.farBank, model, motion);
 
     // TIER 1: Sub-Surface Water Caustics & Submerged Stems
     _waterCaustics(canvas, model, motion);
@@ -241,6 +257,7 @@ class PondRenderer {
     // TIER 3: Composable Water Surface Shimmer & Expanding Refraction Ripples
     // (Rendered OVER Koi & Tadpoles so ripples refract across underlying sprites)
     _waterSurfaceAndRipples(canvas, model, motion);
+    layers.drawSlot(canvas, LayerSlot.midBank, model, motion);
 
     // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Splash Droplets, Frogs & Bugs
     final allPads = <(PadState, double, double, double)>[
@@ -295,11 +312,14 @@ class PondRenderer {
     for (final bug in model.bugs) {
       if (bug.alive) _bug(canvas, bug, model);
     }
+    layers.drawSlot(canvas, LayerSlot.canopy, model, motion);
+    layers.drawSlot(canvas, LayerSlot.particles, model, motion);
 
     // TIER 5: Shore Foliage, Biome Atmospheric Motifs & Weather
     _foliage(canvas, model, motion, source != null);
     _motifs(canvas, model, motion, night);
     _weather(canvas, model, motion);
+    layers.drawSlot(canvas, LayerSlot.nearCorner, model, motion);
     canvas.restore();
   }
 
@@ -932,40 +952,9 @@ class PondRenderer {
         _oval(c, sideX, sy, 3, 2, color, pulse * (.14 + m.richness * .18));
         _rect(c, sideX, sy, 1, 1, 0xffffffff, pulse * (.45 + night * .35));
       }
-    } else if (m.biome == 'maple' ||
-        m.biome == 'autumn_mist' ||
-        m.biome == 'blossom' ||
-        m.biome == 'lotus') {
-      final isMaple = m.biome == 'maple' || m.biome == 'autumn_mist';
-      for (var i = 0; i < 16; i++) {
-        final d = _details[170 + i];
-        final driftX =
-            (d.x * _width +
-                (reducedMotion
-                    ? 0
-                    : m.time * (isMaple ? 3.5 : 5.2) +
-                          math.sin(m.time * .7 + i) * 8)) %
-            _width;
-        final driftY = 185 + d.y * 155 + math.cos(m.time * .9 + i) * 2 * motion;
-        final color = isMaple
-            ? (i % 3 == 0
-                  ? 0xffe2523a
-                  : i % 3 == 1
-                  ? 0xfff08c3b
-                  : 0xffe6b84c)
-            : (i.isEven ? 0xfff7bfd4 : 0xffffdfe9);
-        _rect(c, driftX, driftY, isMaple ? 4 : 3, 2, color, .55 + d.z * .3);
-        _rect(c, driftX + 1, driftY - 1, 2, 1, color, .4);
-      }
-    } else if (m.biome == 'cypress' || m.biome == 'firefly') {
-      for (var i = 0; i < 14; i++) {
-        final d = _details[185 + i];
-        final x = i.isEven ? 20 + d.x * 150 : _width - 20 - d.x * 150;
-        final len = 14 + d.z * 26;
-        final sway = math.sin(m.time * .55 + i) * 2.5 * motion;
-        _line(c, x, 4 + d.y * 28, x + sway, 4 + d.y * 28 + len, 0xff5a7a6e, .5);
-      }
     }
+    // Drifting petals, maple leaves and Spanish moss moved to the layer
+    // stack (`scene_layers.dart`): canopy generators and particle emitters.
   }
 
   void _foliage(ui.Canvas c, PondModel m, double motion, bool hasImage) {
@@ -1192,6 +1181,7 @@ class PondRenderer {
 
   /// Releases only procedural caches, never the externally owned images.
   void dispose() {
+    layers.dispose();
     _scenery?.dispose();
     _scenery = null;
     _details = const [];

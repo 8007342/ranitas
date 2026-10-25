@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ranitas/game/palette_cycle.dart';
 import 'package:ranitas/game/pond_model.dart';
 import 'package:ranitas/game/pond_renderer.dart';
 
@@ -42,9 +43,18 @@ void main() {
         expect(backdrop.width, 2557);
         expect(backdrop.height, 1439);
 
+        final cycles = <PaletteCycle>[];
+        for (final spec in PaletteCycles.specsFor(probe.backdropAsset)) {
+          cycles.add(await PaletteCycle.bake(spec));
+        }
+        final foreground = await _loadAssetImage(
+          'assets/images/${probe.foregroundAsset}',
+        );
         final renderer = PondRenderer()
           ..backdrop = backdrop
-          ..frogSheets = [meadowSheet, tealSheet];
+          ..frogSheets = [meadowSheet, tealSheet]
+          ..cycles = cycles;
+        renderer.layers.foregroundImage = foreground;
 
         for (final stage in ['still', 'alive', 'sleep']) {
           if (stage == 'alive') {
@@ -74,6 +84,10 @@ void main() {
           picture.dispose();
         }
         renderer.dispose();
+        for (final cycle in cycles) {
+          cycle.dispose();
+        }
+        foreground.dispose();
         backdrop.dispose();
       }
       expect(seenBiomes, PondModel.biomes.toSet());

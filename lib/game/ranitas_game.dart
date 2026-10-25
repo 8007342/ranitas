@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/game.dart';
@@ -6,9 +5,9 @@ import 'package:flame/game.dart';
 import '../audio/ambience.dart';
 import '../platform/scene_ready.dart';
 import 'optional_assets.dart';
+import 'palette_cycle.dart';
 import 'pond_model.dart';
 import 'pond_renderer.dart';
-import 'scene_grade.dart';
 
 class RanitasGame extends FlameGame {
   RanitasGame({int? seed, double? durationOverride})
@@ -16,7 +15,9 @@ class RanitasGame extends FlameGame {
   final PondModel model;
   final PondRenderer renderer = PondRenderer();
   final PondAmbience ambience = PondAmbience();
-  Image? foreground;
+
+  /// Baked palette-cycle frames for this session's backdrop; owned here.
+  List<PaletteCycle> cycles = const [];
   double audioClock = 0;
   @override
   Color backgroundColor() => const Color(0xff102c36);
@@ -32,7 +33,24 @@ class RanitasGame extends FlameGame {
       await images.load('frog-teal-sheet.webp'),
     ];
     renderer.wildlifeSheet = await images.load('pond-wildlife-sheet.webp');
-    foreground = await images.load(model.foregroundAsset);
+    // Optional painted layers (art/ASSET_REQUESTS.md); null means procedural.
+    final layers = renderer.layers;
+    layers.canopyImage = await OptionalAssets.load(
+      images,
+      OptionalAssets.canopy(model.biome),
+    );
+    layers.midBankImage = await OptionalAssets.load(
+      images,
+      OptionalAssets.midBank(model.biome),
+    );
+    layers.foregroundImage =
+        await OptionalAssets.load(
+          images,
+          OptionalAssets.foreground(model.biome),
+        ) ??
+        await images.load(model.foregroundAsset);
+    cycles = await PaletteCycles.load(model.backdropAsset, images);
+    renderer.cycles = cycles;
     sceneReady();
   }
 
@@ -57,6 +75,10 @@ class RanitasGame extends FlameGame {
   @override
   void onRemove() {
     renderer.dispose();
+    for (final cycle in cycles) {
+      cycle.dispose();
+    }
+    cycles = const [];
     ambience.dispose();
     super.onRemove();
   }
@@ -64,31 +86,7 @@ class RanitasGame extends FlameGame {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    // The corner foreground now draws inside the renderer's layer stack.
     renderer.render(canvas, Size(size.x, size.y), model);
-    final layer = foreground;
-    if (layer == null) return;
-    final opacity = (model.richness - .12).clamp(0.0, 1.0) * .68;
-    final sway = renderer.reducedMotion
-        ? 0.0
-        : math.sin(model.time * .18) * size.x * .003 * model.richness;
-    canvas.save();
-    canvas.clipRect(Rect.fromLTWH(0, 0, size.x, size.y));
-    canvas.drawImageRect(
-      layer,
-      Rect.fromLTWH(0, 0, layer.width.toDouble(), layer.height.toDouble()),
-      Rect.fromLTWH(
-        -size.x * .01 + sway,
-        size.y * .14,
-        size.x * 1.02,
-        size.y * .86,
-      ),
-      Paint()
-        ..filterQuality = FilterQuality.none
-        ..color = Color.fromRGBO(255, 255, 255, opacity)
-        // Same continuous grade as the backdrop, so the near corner darkens
-        // with the scene instead of a separate modulate tint.
-        ..colorFilter = SceneGrade.filterFor(model),
-    );
-    canvas.restore();
   }
 }
