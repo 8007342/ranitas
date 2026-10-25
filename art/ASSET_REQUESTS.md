@@ -169,4 +169,29 @@ result.
 
 - `insects-night-sheet.png`: moth, mayfly and glow-beetle wing frames (8×8
   effective pixels, 4 frames each). Insects are currently drawn procedurally.
+- `insects-scenery-sheet.png` (optional): the signature species of each
+  scenery, 8×8 effective pixels, 4 frames each, one row per species, in the
+  order of `InsectSpecies.table` (`lib/game/insect_species.dart`). The
+  procedural sprites in `_bug` stay as the fallback and set the read of each:
+  - `waterstrider`: thin dark body, four splayed legs, surface dimples
+    (willow, lotus, blossom, sanctuary, jade_sanctuary).
+  - `whirligig`: glossy black bead with a bronze glint, faint wake (willow,
+    cypress, firefly).
+  - `damselfly`: level needle body, blue or emerald variant, paired folded
+    wings (lotus, blossom, jade_sanctuary).
+  - `bee`: amber and black stripes, wing blur (blossom, sanctuary,
+    jade_sanctuary, alpine).
+  - `cicada`: stout olive body, wide clear wings laid back (maple, sanctuary,
+    jade_sanctuary).
+  - `cricket`: dark brown hopper, long antennae, bent hind leg (maple,
+    autumn_mist, night).
+  - `katydid`: leaf-green upright wings, antennae forward (cypress, firefly,
+    night).
+  - `cranefly`: thread body, dangling legs, two slow wings (autumn_mist,
+    cypress).
+  - `stonefly`: slate body, flat wings, two tail filaments (alpine).
+  - `cavecricket`: pale humpback, very long antennae (grotto, crystal_grotto).
+  - `jewelbeetle`: metallic jade carapace with a travelling glint
+    (jade_sanctuary).
+  - `fungusgnat`: a speck with a faint cyan halo (crystal_grotto).
 - Whole-number re-exports: done (§7).

@@ -71,6 +71,8 @@ class RanitasGame extends FlameGame {
           model.richness,
           model.audioWeather,
           model.sleeping,
+          rainIntensity: model.rainIntensity,
+          species: model.speciesPresence,
         );
       }
     }

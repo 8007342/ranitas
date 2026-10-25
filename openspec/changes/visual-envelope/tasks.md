@@ -44,3 +44,10 @@
 - [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
 - [x] 5.2 Update styleguides and README for the new systems
 - [x] 5.3 Visual check of rendered frames for every biome (offscreen renders, not a browser; see docs/visual-envelope.md)
+
+## 7. Fauna and sound (branch `work/pond-fauna-sound`)
+
+- [x] 7.1 Thunder follows the rain envelope: brief, capped heavy rumbles in downpours, at least 60 s apart, lulls return to distant; rain intensity passed to the ambience (backward compatible)
+- [x] 7.2 Signature insect species per scenery (12 new, all catchable, procedural sprites), common-species absences, all-weather residents
+- [x] 7.3 Species-linked ambient voices (cricket, katydid, bee, cicada) gated on on-screen presence; per-species presence string from the model
+- [x] 7.4 Tests: signature availability and absences per biome, resident coverage, presence string, partition determinism, sprite smoke; Node tests for the pure thunder plan (`npm run test:ambience`)

@@ -214,9 +214,15 @@ riding during sleep (yes), regenerating sheets (yes, on request), the
 whole-number re-export (done), and a depth-aware JEV (retrained, plus patience;
 see `docs/policy.md`).
 
-1. In storms, should thunder density follow rain intensity?
-2. Which night insects are prey and which are only ambience? Should each biome
-   use a fixed table or a seeded subset?
+1. ~~In storms, should thunder density follow rain intensity?~~ **Decided
+   2026-10-25:** it may get heavier, but briefly; downpours allow an occasional
+   fuller rumble, capped at a croak's level and at least 60 s apart, and lulls
+   return to the distant one (design D1).
+2. ~~Which night insects are prey and which are only ambience? Should each
+   biome use a fixed table or a seeded subset?~~ **Decided 2026-10-25:** all
+   bugs are edible; each scenery has a fixed table with one or two signature
+   species, some common species stay away, and a few species carry a voice
+   that sounds only while they are on screen (design D2).
 3. Should night push every biome toward one indigo, or should each biome keep
    its own palette? Would you accept a fragment-shader LUT later?
 4. Which painted elements must glow at night in each backdrop? Do you want to

@@ -56,6 +56,22 @@ drop cap `round(6 + 36·I)`, spawn rate `20 + 90·I` /s, streak length
 to `I = 1`, cloud darkening `smoothstep((I − 0.06)/0.84)`, heavy-rain fog
 fading in above 0.5, and up to 30 visual-only sheet streaks above 0.7.
 
+*Thunder (decided 2026-10-25: "could get heavier but briefly — we want a
+relaxing game").* The model now passes `rainIntensity` to the ambience beside
+the derived weather label (`PondAmbience.update(…, rainIntensity:, species:)`,
+both optional on the JavaScript side, so the four-argument form still works).
+In `web/ambience.js` a pure `thunderPlan(rain, now, lastHeavyAt, rnd)` picks
+each rumble while the storm label is active: the **distant** rumble is the
+original voice (low-pass 180 Hz noise, 3.5 s, gain 0.18); a **heavy** rumble is
+allowed only while the rain is a downpour (intensity ≥ 0.75), with a chance of
+35 % at the threshold rising to 75 % at intensity 1, never within 60 s of the
+previous heavy one, and is brief: 0.05 s attack into a 1.6 s decay, low-passed
+at 260 Hz, gain capped at 0.26 (one croak syllable). The 22–45 s scheduling
+interval is unchanged for both kinds, so lulls return to distant rumbles by
+themselves. No lightning or flash of any kind; the renderer is untouched. The
+plan is tested without an `AudioContext` by `scripts/ambience.test.mjs`
+(`npm run test:ambience`).
+
 ### D2 Insect species table
 
 Species become a table: base speed, flight style, altitude band, glow colour,
@@ -75,6 +91,41 @@ mayfly speed 0.05, wing rate 9, band 0.5–0.68, hard floor 0.72, bob 0.03;
 glowbeetle speed 0.04, band 0.3–0.62, turn gain 0.9, cyan or violet by a
 variant bit derived from the spawn phase (no extra random draw). Spawn draws
 keep their original order (species, angle, x, y, phase).
+
+*Signature species (decided 2026-10-25: "all bugs are edible, but the set of
+bugs should match the scenery").* Every scenery now owns one or two species
+found only there or in a few related sceneries, some common species stay away
+from sceneries they do not suit, and four species carry an ambient voice that
+plays only while they are on screen. The matching is artistic natural history,
+not biology. Twelve species join the table, all catchable, all drawn
+procedurally in `_bug`:
+
+| Species | Sceneries | Hours / weather | Voice |
+| --- | --- | --- | --- |
+| `waterstrider` (skates, band 0.57–0.68) | willow, lotus, blossom, sanctuary, jade_sanctuary | daylight ≥ 0.2, until rain reaches 0.5 | – |
+| `whirligig` (spins, band 0.58–0.68) | willow, cypress, firefly | any hour, until rain reaches 0.5 | – |
+| `damselfly` (blue or emerald) | lotus, blossom, jade_sanctuary | dry daylight, progress ≥ 0.12 | – |
+| `bee` | blossom, sanctuary, jade_sanctuary, alpine | dry daylight, progress ≥ 0.1 | hum |
+| `cicada` (canopy band 0.14–0.4) | maple, sanctuary, jade_sanctuary | warm: daylight ≥ 0.3, not storm | drone |
+| `cricket` (night set) | maple, autumn_mist | dry dusk/night | trill |
+| `katydid` (night set) | cypress, firefly | dry dusk/night | rasp |
+| `cranefly` | autumn_mist, cypress | damp air, until rain reaches 0.5, not storm | – |
+| `stonefly` | alpine only | any hour, any weather | – |
+| `cavecricket` | grotto, crystal_grotto | any hour, any weather | – |
+| `jewelbeetle` | jade_sanctuary only | dry daylight, progress ≥ 0.2 | – |
+| `fungusgnat` (faint cyan halo) | crystal_grotto only | any hour | – |
+
+Absences: `mosquito` leaves alpine and both grottos; `butterfly` leaves the
+grottos and autumn_mist; `dragonfly` leaves the grottos; `ladybug` leaves
+cypress, firefly, lotus and the grottos. Stoneflies and cave crickets are the
+all-weather residents of the sceneries without mosquitoes, so no scenery is
+ever empty (`_spawnBug` also guards an empty list without drawing). Table
+additions: `vertical` (share of heading that becomes climb; 0.08–0.2 for
+skaters and hoppers), `spawnInBand` (night sets and signature species spawn
+inside their band; the original day species keep the 0.2–0.6 airspace) and
+`voice`. The spawn budget formula and the draw order are unchanged; new
+species only change which name a given draw selects. `PondModel.speciesPresence`
+reports visible voiced insects as `cricket:3,bee:1` for the ambience.
 
 ### D3 Time-of-day grade (colour matrix, not shader)
 

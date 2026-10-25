@@ -7,8 +7,10 @@ class PondAmbience {
     double progress,
     double richness,
     String weather,
-    bool sleeping,
-  ) {}
+    bool sleeping, {
+    double rainIntensity = 0,
+    String species = '',
+  }) {}
   void suspend() {}
   void resume() {}
   void dispose() {}
