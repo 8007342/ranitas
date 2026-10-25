@@ -44,8 +44,19 @@ class PondModel {
     // main stream keeps its biome/weather/cycle draw order across versions.
     _fxRandom = Random(sceneSeed ^ 0x5f3759df);
     _noiseSeed = (sceneSeed ^ 0x3c6ef372) & 0x7fffffff;
-    pads = _placeHeroPads();
-    ambientPads = _generateAmbientPads();
+    // About a quarter of worlds grow one super pad. The basins are too small
+    // for one beside the jump lane, so those worlds seed both heroes in the
+    // near band and the super pad takes the far shore behind them.
+    _wantsSuperPad = _fxRandom.nextDouble() < _superPadChance &&
+        basin.bottomY - basin.topY >= _superPadBasinHeight;
+    pads = _placeHeroPads(nearBand: _wantsSuperPad);
+    var ambient = _generateAmbientPads(allowLarge: true);
+    if (ambient.length < 4) {
+      // The tightest basins keep at least four leaves: retry without the
+      // large tier (same seeded stream, so the layout stays reproducible).
+      ambient = _generateAmbientPads(allowLarge: false);
+    }
+    ambientPads = ambient;
     frogs = [
       FrogState(0, pads[0].x, pads[0].y),
       FrogState(1, pads[1].x, pads[1].y),
@@ -236,14 +247,34 @@ class PondModel {
   static const double _wakeSpeed = 2.5;
   static const double _wakeInterval = .45;
 
+  /// In-plane pad rotation (design D6). Angular drag pulls the spin toward the
+  /// water's own rotation (the current's vorticity plus a seeded bias); pushes
+  /// act through the slit's area asymmetry with lever `_slitLever × R`.
+  static const double _yawDrag = .6;
+  static const double _yawCap = 1.2;
+  static const double _slitLever = .12;
+  static const double _landingSpinShare = .3;
+  static const double _impactSpinCap = .6;
+  static const double _waterSpinCap = .25;
+
+  /// Ambient size tiers: about one placed leaf in ten is large (21–28 px,
+  /// close to hero size), and about one world in four grows a single super
+  /// pad (Victoria-style, 42–54 px). Only basins at least 88 px tall have
+  /// room for one behind both heroes; the roll is made in every world so the
+  /// seeded stream stays aligned.
+  static const double _largePadChance = .3;
+  static const double _superPadChance = .42;
+  static const double _superPadBasinHeight = 88;
+  late final bool _wantsSuperPad;
+
   /// Shared perspective law for pads, frogs and stems: `0.56` at the far shore
   /// and `1.04` at the near rim of the water basin.
   double perspectiveAt(double yPx) => basin.perspectiveAt(yPx);
 
-  /// Sprite scale for a frog: perspective at its ground point (not its airborne
-  /// y), quantised to 1/16 so soft painted cells do not shimmer (design D7).
-  double frogScale(FrogState frog) =>
-      (basin.perspectiveAt(frog.groundY * 359) * 16).roundToDouble() / 16;
+  /// Sprite scale for a frog: the continuous perspective at its ground point
+  /// (not its airborne y), so the frog shrinks smoothly through an away arc
+  /// (design D7). The painter snaps the drawn size to whole pixels.
+  double frogScale(FrogState frog) => basin.perspectiveAt(frog.groundY * 359);
 
   /// Recomputes a pad's on-screen radii from its current depth. `radiusY` is
   /// quantised to half pixels so scanline ovals do not flicker while drifting.
@@ -287,7 +318,7 @@ class PondModel {
   }
 
   PadState _heroCandidate(int index, double baseRx, double section, double py,
-      double frac) {
+      double frac, double phase, double spinBias) {
     final s = basin.perspectiveAt(py);
     final rx = baseRx * s;
     // Narrowest walls the section can reach lie toward the far shore.
@@ -303,46 +334,114 @@ class PondModel {
       y: py / 359,
       baseRx: baseRx,
       sectionRadius: section,
+      phase: phase,
+      spinBias: spinBias,
     );
     projectPad(pad);
     return pad;
   }
 
+  /// Seeded slow spin bias, ±0.01–0.03 rad/s: a full turn in 3.5–10 minutes
+  /// on top of whatever the current's shear does.
+  double _drawSpinBias() =>
+      (_fxRandom.nextBool() ? 1 : -1) * (.01 + _fxRandom.nextDouble() * .02);
+
   /// Hero pad 0 sits in the left 22–42 % of the basin width and hero 1 in the
   /// right 58–78 %, each at any depth whose section still fits the basin.
-  List<PadState> _placeHeroPads() {
+  List<PadState> _placeHeroPads({bool nearBand = false}) {
     for (var attempt = 0; attempt < 40; attempt++) {
       final candidates = <PadState>[];
       for (var i = 0; i < 2; i++) {
         final baseRx = 30 + _fxRandom.nextDouble() * 10;
         final section = 10 + _fxRandom.nextDouble() * 4;
         final ryMax = baseRx * 1.04 * .35;
-        final minY = basin.topY + ryMax + section + 4;
+        final minY = max(
+          basin.topY + ryMax + section + 4,
+          nearBand ? basin.topY + .62 * (basin.bottomY - basin.topY) : 0.0,
+        );
         final maxY = basin.bottomY - ryMax - section - 4;
         final py = minY + _fxRandom.nextDouble() * max(1.0, maxY - minY);
         final frac = (i == 0 ? .22 : .58) + _fxRandom.nextDouble() * .20;
-        candidates.add(_heroCandidate(i, baseRx, section, py, frac));
+        final phase = _fxRandom.nextDouble() * pi * 2;
+        final spin = _drawSpinBias();
+        candidates.add(
+          _heroCandidate(i, baseRx, section, py, frac, phase, spin),
+        );
       }
       if (_sweptGap(candidates[0], candidates[1]) >= 0) return candidates;
     }
     // Deterministic fallback for the narrowest basins: a classic near-rim pair.
     final py = basin.topY + .72 * (basin.bottomY - basin.topY);
     return [
-      _heroCandidate(0, 32, 10, py, .27),
-      _heroCandidate(1, 34, 10, py, .73),
+      _heroCandidate(0, 32, 10, py, .27, 2.6, .02),
+      _heroCandidate(1, 34, 10, py, .73, .5, -.02),
     ];
+  }
+
+  /// Positive when [pad]'s swept box lies wholly behind the jump lane: above
+  /// the hull of both hero sections, so every left↔right flight passes in
+  /// front of it and it can never touch a hero.
+  double _laneGap(PadState pad) {
+    var t = double.infinity;
+    for (final hero in pads) {
+      t = min(t, hero.y * 359 - hero.radiusY - hero.sectionRadius);
+    }
+    final py = pad.y * 359;
+    return t - (py + pad.radiusY + pad.sectionRadius + 4);
   }
 
   /// Four to nine ambient leaves placed clear of the hero sections. Each keeps
   /// the small drift section it was placed with (4–10 px, 2 px for the last
   /// tight fits), checked against every other section, so sections never
-  /// overlap and pads inside their sections can never touch.
-  List<PadState> _generateAmbientPads() {
+  /// overlap and pads inside their sections can never touch. Sizes come in
+  /// tiers: most leaves 9.5–21 px, about one placed leaf in ten large
+  /// (21–28 px), and in about a quarter of worlds one super pad (42–54 px)
+  /// that takes the first slot, sits behind both heroes clear of the jump
+  /// lane, and is decorative only.
+  List<PadState> _generateAmbientPads({required bool allowLarge}) {
     final result = <PadState>[];
     final count = 5 + _fxRandom.nextInt(5);
 
-    for (var i = 0; i < count; i++) {
+    if (_wantsSuperPad) {
+      for (var attempt = 0; attempt < 120; attempt++) {
+        final allowance = max(_minSection, 8.0 - attempt * .05);
+        final yn = .04 + _fxRandom.nextDouble() * .36;
+        final py = basin.topY + yn * (basin.bottomY - basin.topY);
+        final baseRx = 42 + _fxRandom.nextDouble() * 12;
+        final rx = baseRx * basin.perspectiveAt(py);
+        final left = basin.leftX(py) + rx + allowance + 4;
+        final right = basin.rightX(py) - rx - allowance - 4;
+        if (right <= left) continue;
+        final px = left + _fxRandom.nextDouble() * (right - left);
+        final candidate = PadState(
+          index: 2,
+          x: px / 641,
+          y: py / 359,
+          baseRx: baseRx,
+          sectionRadius: allowance,
+          isAmbient: true,
+          isSuper: true,
+          phase: _fxRandom.nextDouble() * pi * 2,
+          spinBias: _drawSpinBias(),
+        );
+        projectPad(candidate);
+        if (py - candidate.radiusY - allowance < basin.topY + 2 ||
+            py + candidate.radiusY + allowance > basin.bottomY - 2 ||
+            _basinRoom(candidate) < allowance) {
+          continue;
+        }
+        if (pads.any((hero) => _sweptGap(candidate, hero) < 0)) continue;
+        if (_laneGap(candidate) < 0) continue;
+        result.add(candidate);
+        break;
+      }
+    }
+
+    for (var i = result.length; i < count; i++) {
       var placed = false;
+      final large = _fxRandom.nextDouble() < _largePadChance && allowLarge;
+      final phase = _fxRandom.nextDouble() * pi * 2;
+      final spin = _drawSpinBias();
       for (var attempt = 0; attempt < 400 && !placed; attempt++) {
         // Ask for generous drift room first, then relax when the basin is
         // tight, and finally fall back to small leaves for the last slots.
@@ -351,8 +450,10 @@ class PondModel {
             : 2.0;
         final yn = .06 + _fxRandom.nextDouble() * .88;
         final py = basin.topY + yn * (basin.bottomY - basin.topY);
-        final baseRx =
-            9.5 + _fxRandom.nextDouble() * (attempt < 100 ? 11.5 : 3.5);
+        final roll = _fxRandom.nextDouble();
+        final baseRx = large && attempt < 120
+            ? 21 + roll * 7
+            : 9.5 + roll * (attempt < 100 ? 11.5 : 3.5);
         final rx = baseRx * basin.perspectiveAt(py);
         final left = basin.leftX(py) + rx + allowance + 4;
         final right = basin.rightX(py) - rx - allowance - 4;
@@ -366,7 +467,8 @@ class PondModel {
           sectionRadius: allowance,
           isAmbient: true,
           hasLotus: i % 3 == 0,
-          phase: _fxRandom.nextDouble() * pi * 2,
+          phase: phase,
+          spinBias: spin,
         );
         projectPad(candidate);
         if (py - candidate.radiusY - allowance < basin.topY + 2 ||
@@ -425,9 +527,27 @@ class PondModel {
 
   /// Water current at a pad in px/s: the curl of seeded value noise (90 px,
   /// 25 s), 0.8–2.0 px/s (hero pads × 0.6), plus the wind.
-  (double, double) currentAt(PadState pad) {
-    final px = pad.x * 641 / _currentScale;
-    final py = pad.y * 359 / _currentScale;
+  (double, double) currentAt(PadState pad) =>
+      _currentAtPx(pad.x * 641, pad.y * 359, pad.isAmbient);
+
+  /// Vorticity of the current across a pad (rad/s, positive clockwise on
+  /// screen): the shear that turns a free-floating leaf. Sampled one pad
+  /// radius out on each side so it reflects the flow over the leaf, not a
+  /// point derivative; the wind term is uniform and cancels.
+  double vorticityAt(PadState pad) {
+    final x = pad.x * 641;
+    final y = pad.y * 359;
+    final e = max(6.0, pad.radiusX * .7);
+    final (_, cyE) = _currentAtPx(x + e, y, pad.isAmbient);
+    final (_, cyW) = _currentAtPx(x - e, y, pad.isAmbient);
+    final (cxS, _) = _currentAtPx(x, y + e, pad.isAmbient);
+    final (cxN, _) = _currentAtPx(x, y - e, pad.isAmbient);
+    return ((cyE - cyW) - (cxS - cxN)) / (2 * e);
+  }
+
+  (double, double) _currentAtPx(double xPx, double yPx, bool ambient) {
+    final px = xPx / _currentScale;
+    final py = yPx / _currentScale;
     final pt = time / _currentTimeScale;
     const eps = 2 / _currentScale;
     final gx =
@@ -448,8 +568,20 @@ class PondModel {
       cy /= mag;
     }
     final speed =
-        (.8 + 1.2 * (mag / 1.1).clamp(0.0, 1.0)) * (pad.isAmbient ? 1.0 : .6);
+        (.8 + 1.2 * (mag / 1.1).clamp(0.0, 1.0)) * (ambient ? 1.0 : .6);
     return (cx * speed + wind * 3, cy * speed);
+  }
+
+  /// Spins a pad from a push through the water. The slit removes leaf area on
+  /// one side, so the centre of pressure sits `_slitLever × R` opposite the
+  /// slit and a push has a lever: `α = (e × F) / (R² / 2)`. [ax]/[ay] is the
+  /// screen-plane acceleration (or velocity change when [dt] is 1) given to
+  /// the slide; its y part is unforeshortened into the pad plane.
+  void _spinFromPush(PadState pad, double ax, double ay, double dt) {
+    final theta = pad.slitAngle;
+    final planeY = ay * pad.radiusX / max(1.0, pad.radiusY);
+    final cross = ax * sin(theta) - planeY * cos(theta);
+    pad.yawVelocity += 2 * _slitLever * cross / max(1.0, pad.radiusX) * dt;
   }
 
   /// Transfers a share of a frog's screen-plane momentum to a pad: 70 % to the
@@ -462,6 +594,32 @@ class PondModel {
     pad.vy += .7 * jy;
     pad.driftVelocity += .3 * jx;
     pad.floatVelocity += .3 * jy;
+  }
+
+  /// Angular impulse from a frog leaving or arriving at a perch offset
+  /// ([offsetX], [offsetY] normalised by the pad radii) with screen-plane
+  /// velocity [vxPx]/[vyPx]: `Δω = share · (r × J) / (R² / 2)` plus the slit
+  /// lever on the same impulse. [share] is negative for a takeoff.
+  void _spinFromLever(
+    PadState pad,
+    double offsetX,
+    double offsetY,
+    double vxPx,
+    double vyPx,
+    double share,
+  ) {
+    final mass = 1.6 + .02 * pad.radiusX;
+    final jx = _padImpulseShare * vxPx / mass;
+    final jy = _padImpulseShare * vyPx / mass;
+    final r = max(1.0, pad.radiusX);
+    final planeJy = jy * r / max(1.0, pad.radiusY);
+    final torque = offsetX * r * planeJy - offsetY * r * jx;
+    final before = pad.yawVelocity;
+    pad.yawVelocity += share * torque / (r * r / 2);
+    _spinFromPush(pad, share * jx, share * jy, 1);
+    // One hop turns a pad by a gentle amount, never a spin.
+    final kick = (pad.yawVelocity - before).clamp(-_impactSpinCap, _impactSpinCap);
+    pad.yawVelocity = before + kick;
   }
 
   /// A sliding pad pushes a faint bow wave ahead of it; the ripple then
@@ -577,9 +735,20 @@ class PondModel {
     pad.y = py / 359;
     projectPad(pad);
 
-    // Visual yaw drifts after off-centre impacts and slowly settles.
+    // In-plane rotation: skin friction drags the spin toward the water's own
+    // rotation (current shear plus the seeded bias), so a pad keeps turning
+    // slowly for as long as the pond does; impacts add on top and decay at
+    // the same rate. The angle wraps so it stays bounded for ever.
+    final waterSpin =
+        (vorticityAt(pad) + pad.spinBias).clamp(-_waterSpinCap, _waterSpinCap);
+    pad.yawVelocity += (waterSpin - pad.yawVelocity) * (1 - exp(-_yawDrag * dt));
+    pad.yawVelocity = pad.yawVelocity.clamp(-_yawCap, _yawCap);
     pad.yaw += pad.yawVelocity * dt;
-    pad.yawVelocity *= exp(-dt * .8);
+    if (pad.yaw > pi) {
+      pad.yaw -= 2 * pi;
+    } else if (pad.yaw <= -pi) {
+      pad.yaw += 2 * pi;
+    }
   }
 
   /// Perched and sleeping frogs ride their pads; the perch is pad-relative.
@@ -823,11 +992,16 @@ class PondModel {
     sourcePad.driftVelocity -= frog.facing * 2.2 * launchImpulse;
     sourcePad.dewdropVelocity += 14.0 * launchImpulse;
     sourcePad.landingZone = 'takeoff';
-    _padImpulse(
+    final launchVx = (frog._toX - frog._fromX) * 641 / frog._duration;
+    final launchVy = (frog._toY - frog._fromY) * 359 / frog._duration;
+    _padImpulse(sourcePad, launchVx, launchVy, -.8);
+    _spinFromLever(
       sourcePad,
-      (frog._toX - frog._fromX) * 641 / frog._duration,
-      (frog._toY - frog._fromY) * 359 / frog._duration,
-      -.8,
+      ((frog._fromX - sourcePad.x) * 641 / sourcePad.radiusX).clamp(-1.0, 1.0),
+      ((frog._fromY - sourcePad.y) * 359 / sourcePad.radiusY).clamp(-1.0, 1.0),
+      launchVx,
+      launchVy,
+      -.8 * _landingSpinShare,
     );
     _emitRipple(
       x: sourcePad.x * 641 + sourcePad.driftX,
@@ -983,13 +1157,11 @@ class PondModel {
     final padPxX = pad.x * 641 + pad.driftX;
     final padPxY = pad.y * 359 + 2;
 
-    // Momentum slide plus a yaw kick from the off-centre impact.
+    // Momentum slide plus a spin from the off-centre impact: the perch's lever
+    // in the pad plane crossed with the transferred impulse, over the disc's
+    // moment of inertia (R²/2 per unit mass), then the slit asymmetry.
     _padImpulse(pad, vxPx, vyPx, 1);
-    final mass = 1.6 + .02 * pad.radiusX;
-    pad.yawVelocity +=
-        (offsetX * pad.radiusX * vyPx - offsetY * pad.radiusY * vxPx) *
-        _padImpulseShare /
-        (mass * max(1.0, pad.radiusX) * 8);
+    _spinFromLever(pad, offsetX, offsetY, vxPx, vyPx, _landingSpinShare);
 
     if (offsetMag >= .58) {
       // Zone C: Edge / Rim Landing -> Leaf Edge Fold + Directional Splash + Ripples
@@ -1384,8 +1556,11 @@ class PondModel {
           final ox = (r.x - padPxX) / pad.radiusX;
           final oy = (r.y - padPxY) / max(1.0, pad.radiusY);
           if (ox * ox + oy * oy > 1.2) {
-            pad.vx += (dx / dist) * _rippleDriftK * waveStrength * dt;
-            pad.vy += (dy / dist) * .34 * _rippleDriftK * waveStrength * dt;
+            final ax = (dx / dist) * _rippleDriftK * waveStrength;
+            final ay = (dy / dist) * .34 * _rippleDriftK * waveStrength;
+            pad.vx += ax * dt;
+            pad.vy += ay * dt;
+            _spinFromPush(pad, ax, ay, dt);
           }
         }
       }
@@ -1407,8 +1582,11 @@ class PondModel {
           }
           pad.tiltVelocity += cos(k.heading) * 7.5 * wake * dt;
           pad.dipVelocity += 6.0 * wake * dt;
-          pad.vx += cos(k.heading) * _koiDriftK * wake * dt;
-          pad.vy += sin(k.heading) * .5 * _koiDriftK * wake * dt;
+          final ax = cos(k.heading) * _koiDriftK * wake;
+          final ay = sin(k.heading) * .5 * _koiDriftK * wake;
+          pad.vx += ax * dt;
+          pad.vy += ay * dt;
+          _spinFromPush(pad, ax, ay, dt);
         }
       }
 
@@ -1916,8 +2094,10 @@ class PadState {
     required this.baseRx,
     required this.sectionRadius,
     this.isAmbient = false,
+    this.isSuper = false,
     this.hasLotus = false,
     this.phase = 0,
+    this.spinBias = 0,
   }) : homeX = x,
        homeY = y,
        radiusX = baseRx,
@@ -1931,9 +2111,20 @@ class PadState {
   double sectionRadius;
 
   /// Slide velocity in px/s relative to the water (the current is added on
-  /// top) and visual yaw (rotates veins and lotus only).
+  /// top) and in-plane rotation: [yaw] in (−π, π] turns the slit, veins and
+  /// lotus anchor around the projected ellipse; [yawVelocity] in rad/s.
   double vx = 0, vy = 0;
   double yaw = 0, yawVelocity = 0;
+
+  /// Seeded slow rotation of the water under this pad (rad/s).
+  final double spinBias;
+
+  /// A Victoria-style super pad: decorative, upturned rim, never a perch.
+  final bool isSuper;
+
+  /// Pad-plane angle of the radial slit (seeded [phase] plus [yaw]). Screen
+  /// direction is `(cos θ · radiusX, sin θ · radiusY)`.
+  double get slitAngle => phase + yaw;
 
   /// Seconds until this pad may shed another wake ripple.
   double wakeClock = 0;

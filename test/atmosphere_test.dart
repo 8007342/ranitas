@@ -420,27 +420,36 @@ void main() {
     });
 
     test('skaters keep to the water surface and residents fly in storms', () {
-      // A long afternoon so the skaters have time to arrive.
-      final lotus = PondModel(
-        seed: _firstWith(
-          (m) =>
-              m.biome == 'lotus' && m.cycle == 'dusk' && m.weather == 'clear',
-        ).sceneSeed,
-        durationOverride: 120,
-      );
-      expect(lotus.biome, 'lotus');
-      lotus.press();
-      lotus.release();
-      lotus.update(6);
-      for (var i = 0; i < 40; i++) {
-        lotus.update(1);
-        for (final b in lotus.bugs.where((b) => b.species == 'waterstrider')) {
-          if (b.opacity < 1) continue;
-          expect(b.y, greaterThan(.5), reason: 'striders stay on the water');
-          expect(b.y, lessThanOrEqualTo(.72));
+      // Long afternoons across several lotus ponds, so the claim does not
+      // hinge on one seed's spawn luck.
+      var lotusPonds = 0;
+      var withStriders = 0;
+      for (var seed = 0; seed < 4000 && lotusPonds < 6; seed++) {
+        final probe = PondModel(seed: seed, durationOverride: 120);
+        if (probe.biome != 'lotus' ||
+            probe.cycle != 'dusk' ||
+            probe.weather != 'clear') {
+          continue;
         }
+        lotusPonds++;
+        probe.press();
+        probe.release();
+        probe.update(6);
+        var sawStrider = false;
+        for (var i = 0; i < 60; i++) {
+          probe.update(1);
+          for (final b in probe.bugs.where((b) => b.species == 'waterstrider')) {
+            sawStrider = true;
+            if (b.opacity < 1) continue;
+            expect(b.y, greaterThan(.5), reason: 'striders stay on the water');
+            expect(b.y, lessThanOrEqualTo(.72));
+          }
+        }
+        if (sawStrider) withStriders++;
       }
-      expect(lotus.bugs.any((b) => b.species == 'waterstrider'), isTrue);
+      expect(lotusPonds, 6);
+      expect(withStriders, greaterThanOrEqualTo(3),
+          reason: 'striders arrive in most lotus afternoons');
 
       final alpine = _firstWith(
         (m) => m.biome == 'alpine' && m.weather == 'storm',

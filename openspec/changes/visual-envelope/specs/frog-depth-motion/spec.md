@@ -4,14 +4,18 @@
 
 A frog's rendered size SHALL follow the perspective of the point on the pond
 beneath it, including during flight, so jumps between pads at different depths
-grow or shrink the frog smoothly. Arc height SHALL scale with the same factor.
-Flight duration SHALL not change with depth.
+grow or shrink the frog smoothly. The scale SHALL be continuous along the arc,
+with no quantised steps; the painter MAY snap the drawn sprite to whole pixels
+to keep nearest-neighbour sampling stable. Arc height SHALL scale with the
+same factor. Flight duration SHALL not change with depth.
 
 #### Scenario: Jumping away
 
 - **GIVEN** a source pad nearer the viewer than the target pad
 - **WHEN** the frog jumps
 - **THEN** its rendered size decreases monotonically through the flight
+- **AND** no single frame changes it by more than a twentieth of the whole
+  change, nor by 1/16
 - **AND** it lands at the target pad's perspective scale.
 
 ### Requirement: Direction-aware jump views

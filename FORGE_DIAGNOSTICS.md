@@ -70,7 +70,15 @@ session. It is not a benchmark.
    `ERR_MODULE_NOT_FOUND` for `sharp` until `npm ci` ran. That is expected for a
    fresh clone, but a startup-context line saying "JS deps not installed; run
    `npm ci`", like the existing `base_state` lines, would save a round trip.
-6. **Leftover worktrees.** Isolated subagents left
+6. **The source tmpfs fills up with parallel worktrees.** `/home/forge/src`
+   is a 1.5 GB tmpfs. Six subagent worktrees (100–400 MB each with `build/`
+   and `node_modules`) reached **99 % with 25 MB free** while two agents were
+   still running. One agent hit `ENOSPC` mid-test, and another moved its
+   `build/` and `node_modules` to the scratchpad through symlinks. I freed
+   ~870 MB by removing worktrees whose commits were verified on origin. A
+   startup-context line with the tmpfs size and a warning threshold, or
+   auto-pruning finished worktrees, would prevent this.
+7. **Leftover worktrees.** Isolated subagents left
    `.claude/worktrees/agent-*` checkouts behind, which show up as untracked
    `.claude/` in `git status`.
 

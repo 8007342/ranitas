@@ -397,6 +397,44 @@ pad. In flight, the landing point homes toward the moving pad at 6 s⁻¹, which
 keeps the parabola continuous. JEV is unchanged; its y-feature saturates
 outside 0.6–0.8 but is only a 0.008 tie-breaker.
 
+*As implemented (`work/pond-pads-rotation`, owner follow-ups 2026-10-25):*
+
+- **Size tiers.** Each ambient slot rolls large with p = 0.3 (base 21–28 px,
+  close to hero size) and falls back to the normal 9.5–21 px range after 120
+  placement attempts, so about one placed leaf in ten is large (measured
+  210 / 2078 over seeds 0–299). Every world rolls a **super pad** with
+  p = 0.42, honoured only in basins at least 88 px tall (willow, firefly,
+  blossom, lotus, maple, autumn_mist, alpine); the roll is always made so the
+  seeded stream stays aligned. Measured: 71 of 300 seeds grow one, about one
+  world in four. A super pad is Victoria-style: base 42–54 px, an upturned
+  rim with a plum outer wall, twelve ribs, no lotus, and it is **decorative
+  only** (frogs jump hero ↔ hero). The basins are too small for one beside or
+  in front of the jump lane, so a super world seeds both heroes in the near
+  band (y ≥ 62 % of basin depth) and the super pad takes the far shore,
+  wholly above both hero sections, so every flight passes in front of it. If
+  fewer than four leaves fit after the large tier, placement is retried
+  without it.
+- **In-plane rotation.** A pad is a near-circle with a radial V-slit; the yaw
+  is a real pad-plane angle, and the slit, eight veins, rim notch and lotus
+  anchor sit at `θ + yaw` projected through `(cos θ · rx, sin θ · ry)`. The
+  slit is a **true gap**: every scanline fill (shadow, rim, body, highlight,
+  cup, and the super pad's wall, rim top, inner wall and floor) skips the
+  wedge, half-angle 0.11 rad (0.085 for the super pad), outside a stem disc
+  of 0.12 R, so the water, ripples and koi drawn in tiers 2–3 show through.
+  Dynamics: `ω' = −0.6 (ω − ω_water) + torques`, with
+  `ω_water = clamp(vorticity + bias, ±0.25)`, the vorticity a central
+  difference of the current one radius out on each side, and a seeded bias
+  of ±0.01–0.03 rad/s (a full turn in 3.5–10 minutes). Pushes (ripple Stokes
+  drift, koi wakes, landing and takeoff impulses) spin the pad through the
+  slit's area asymmetry, lever `0.12 R` opposite the slit, over `R²/2`;
+  landings and takeoffs add the perch lever `r × J / (R²/2)` at a share of
+  0.3 (takeoff −0.24), each impact capped at 0.6 rad/s; `|ω| ≤ 1.2 rad/s`
+  and the yaw wraps to (−π, π]. Measured idle turning: mean |ω| ≈ 0.037 rad/s
+  (2 °/s); landing kick mean 0.16 rad/s, so one hop turns a pad ≈ 15 °.
+  Rotation continues through sleep. Perches do **not** rotate with the pad:
+  the frog keeps its pad-relative offset, so it never jitters or walks around
+  the leaf while facing the wrong way.
+
 ### D7 Frog depth motion
 
 Frog scale is perspective at its ground point (not its airborne y), quantised to
@@ -409,11 +447,19 @@ join the pad painter's sort keyed by ground y. Away/toward poses are procedural
 pixel matrices now; an optional `frog-<name>-depth-sheet.webp` supersedes them.
 
 *As implemented:* the arc height uses the continuous perspective at the ground
-point (only the sprite scale is quantised, so the arc has no 1/16 steps). The
-visiting perch is `0.78·rx + 4 px` toward the visitor's home side instead of a
-fixed 0.045 of the width. A back-view landing shows `back_idle`; a front-view
-landing uses the side `landing` cell. Chomps during a back-view flight reuse
-`away_fall` (no away chomp cell exists).
+point. The visiting perch is `0.78·rx + 4 px` toward the visitor's home side
+instead of a fixed 0.045 of the width. A back-view landing shows `back_idle`;
+a front-view landing uses the side `landing` cell. Chomps during a back-view
+flight reuse `away_fall` (no away chomp cell exists).
+
+*As implemented (`work/pond-pads-rotation`):* the 1/16 quantisation is gone.
+`frogScale` is the continuous perspective at the ground point, so a frog
+shrinks smoothly through an away arc (a tap flight spreads its ≈ 8 % change
+over 41 frames with no step above 1/20 of the total). Against shimmer the
+painter snaps the drawn size to whole pixels: the sprite transform uses
+`round(42 · s) / 42`, which changes only when the 42 px cell gains or loses a
+column, from an integer origin with `FilterQuality.none`. Shadows, haze and
+the arc still use the continuous value.
 
 ## Risks / Trade-offs
 

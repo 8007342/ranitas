@@ -81,8 +81,12 @@ class FrogSprites {
     final viewPose = frog.viewPose(pose);
     final depthView = viewPose != pose;
 
-    // Perspective at the ground point (quantised) plus atmospheric depth cues.
+    // Continuous perspective at the ground point plus atmospheric depth cues.
+    // The sprite itself is drawn at the nearest whole-pixel width (1/42 steps)
+    // from an integer origin, so nearest-neighbour sampling of the soft cells
+    // only changes when the width does, instead of shimmering every frame.
     final s = model.frogScale(frog);
+    final sDraw = (s * 42).roundToDouble() / 42;
     final depth = model.basin.depthAt(frog.groundY * 359);
     final night = (1 - model.daylight).clamp(0.0, 1.0);
     final haze = ((1 - depth) * (.25 + .35 * night)).clamp(0.0, 1.0);
@@ -295,8 +299,8 @@ class FrogSprites {
     }
 
     canvas.save();
-    canvas.translate(x, y + offsetY * s);
-    canvas.scale(frog.facing * scaleX * s, scaleY * s);
+    canvas.translate(x, y + (offsetY * sDraw).roundToDouble());
+    canvas.scale(frog.facing * scaleX * sDraw, scaleY * sDraw);
 
     void drawCell(ui.Image image, (int, int) cell) {
       final (col, row) = cell;

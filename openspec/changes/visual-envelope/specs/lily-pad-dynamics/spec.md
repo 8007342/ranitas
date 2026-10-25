@@ -13,6 +13,66 @@ not overlap. Repeating a seed SHALL reproduce the layout.
 - **THEN** their hero pad positions or sizes differ
 - **AND** every pad lies inside the basin with its full radius.
 
+### Requirement: Pad size tiers
+
+Ambient leaves SHALL come in seeded size tiers: most between 9.5 and 21 px
+base radius, some notably larger (21–28 px, close to hero size), and in about
+one world in four or five a single super pad (42–54 px) in the Victoria style
+with an upturned rim. A super pad SHALL be decorative only, SHALL sit wholly
+behind both hero sections so every hero-to-hero flight passes in front of it,
+and SHALL never overlap any pad. The large tier SHALL never reduce a world
+below four ambient leaves.
+
+#### Scenario: Super pad frequency over 300 seeds
+
+- **WHEN** 300 seeded ponds are constructed
+- **THEN** between 45 and 90 of them hold exactly one super pad
+- **AND** about one ambient leaf in ten is large
+- **AND** no two pad sections overlap in any of them.
+
+#### Scenario: Super pad stays out of the jump lane
+
+- **GIVEN** a world with a super pad
+- **THEN** the super pad's section bottom lies above both hero sections' tops
+- **AND** the frogs still only perch on the two hero pads.
+
+### Requirement: Pads rotate in their plane
+
+Every pad SHALL rotate in its own plane: a yaw angle turns the slit, veins,
+rim notch and lotus anchor around the projected ellipse while the ellipse
+itself stays put. Yaw SHALL be driven by the current's shear, a seeded slow
+bias, passing ripples, koi wakes and off-centre takeoffs and landings, under
+gentle angular drag, so pads visibly turn over tens of seconds and keep
+turning while the frogs sleep. The slit SHALL be a true gap through which the
+water, ripples and fish beneath are visible. A perched frog SHALL keep its
+perch and stay on its pad while the pad rotates.
+
+#### Scenario: Yaw is bounded, smooth and deterministic
+
+- **WHEN** seeded sessions run for a minute with periodic jumps
+- **THEN** every yaw stays within (−π, π] and every angular speed within 1.2 rad/s
+- **AND** no frame turns a pad by more than 1.2/60 rad
+- **AND** at least one pad makes a quarter turn
+- **AND** yaw is identical across update partitions.
+
+#### Scenario: Landing turns, never spins
+
+- **WHEN** a frog lands on a hero pad
+- **THEN** the pad's angular speed changes by at most 0.6 rad/s.
+
+#### Scenario: See-through slit
+
+- **WHEN** a pad is painted over a flat colour with its slit pointing down,
+  up or diagonally
+- **THEN** a pixel on the slit centreline at 0.6 of the radius shows the flat
+  colour
+- **AND** the pixel opposite the slit and the pixel at the centre show the leaf.
+
+#### Scenario: Koi under a slit
+
+- **WHEN** a koi swims under a hero pad along its slit
+- **THEN** the frame changes along the slit and not under the leaf body.
+
 ### Requirement: Bounded, momentum-driven pad drift
 
 Every pad, hero or ambient, SHALL roam a small bounded section around its

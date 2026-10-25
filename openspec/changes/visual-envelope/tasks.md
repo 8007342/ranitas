@@ -31,6 +31,12 @@
 - [x] 4.5 Procedural away/toward poses; optional depth sheet loading
 - [x] 4.6 Rewrite fixed-home tests as pad-relative invariants; add slide, boundedness and moving-landing tests
 
+## 5. Integration (branch `work/visual-envelope`)
+
+- [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
+- [x] 5.2 Update styleguides and README for the new systems
+- [x] 5.3 Visual check of rendered frames for every biome (offscreen renders, not a browser; see docs/visual-envelope.md)
+
 ## 6. Owner follow-ups (2026-10-25)
 
 - [x] 6.1 Weather follows nature: fog thickens toward night, fine fog drizzle, no showers in mist or clear
@@ -49,15 +55,17 @@
 - [x] 7.6 Emissive masks regenerated so lanterns, fungi, moon and fireflies are lit; maskless backdrops get additive star regions
 - [x] 7.7 Tests: clear-lane bound and poses, atlas determinism, reduced-motion freeze, wind trace, cycle periodicity for every region, render smoke with and without optional images
 
-## 5. Integration (branch `work/visual-envelope`)
+## 8. Pad sizes, rotation and smooth frog scale (branch `work/pond-pads-rotation`)
 
-- [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
-- [x] 5.2 Update styleguides and README for the new systems
-- [x] 5.3 Visual check of rendered frames for every biome (offscreen renders, not a browser; see docs/visual-envelope.md)
+- [x] 8.1 Seeded size tiers: large ambient leaves (21–28 px) and an occasional decorative Victoria-style super pad behind the heroes, never overlapping, never in the jump lane
+- [x] 8.2 Real in-plane rotation: pad-plane yaw turns slit, veins, notch and lotus anchor; vorticity, seeded bias, ripple, koi and impact torques with angular drag; continues through sleep
+- [x] 8.3 See-through slit: scanline fills skip the slit wedge so water, ripples and koi show through; super pad rim and floor cut alike
+- [x] 8.4 Continuous frog scale along the arc with whole-pixel sprite snapping against shimmer
+- [x] 8.5 Tests: size distribution and super frequency over 300 seeds, no overlaps, slit pixel transparency, koi-under-slit frame, yaw bounds/smoothness/partition determinism, perched frog stays on a rotating pad, continuous monotone scale
 
-## 7. Fauna and sound (branch `work/pond-fauna-sound`)
+## 9. Fauna and sound (branch `work/pond-fauna-sound`)
 
-- [x] 7.1 Thunder follows the rain envelope: brief, capped heavy rumbles in downpours, at least 60 s apart, lulls return to distant; rain intensity passed to the ambience (backward compatible)
-- [x] 7.2 Signature insect species per scenery (12 new, all catchable, procedural sprites), common-species absences, all-weather residents
-- [x] 7.3 Species-linked ambient voices (cricket, katydid, bee, cicada) gated on on-screen presence; per-species presence string from the model
-- [x] 7.4 Tests: signature availability and absences per biome, resident coverage, presence string, partition determinism, sprite smoke; Node tests for the pure thunder plan (`npm run test:ambience`)
+- [x] 9.1 Thunder follows the rain envelope: brief, capped heavy rumbles in downpours, at least 60 s apart, lulls return to distant; rain intensity passed to the ambience (backward compatible)
+- [x] 9.2 Signature insect species per scenery (12 new, all catchable, procedural sprites), common-species absences, all-weather residents
+- [x] 9.3 Species-linked ambient voices (cricket, katydid, bee, cicada) gated on on-screen presence; per-species presence string from the model
+- [x] 9.4 Tests: signature availability and absences per biome, resident coverage, presence string, partition determinism, sprite smoke; Node tests for the pure thunder plan (`npm run test:ambience`)
