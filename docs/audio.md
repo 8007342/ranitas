@@ -3,9 +3,10 @@
 All sounds are original procedural Web Audio synthesis in `web/ambience.js`.
 There are no downloads, samples, field recordings, music, melodies, or package
 dependencies. Noise buffers, filtered oscillators, envelopes, and randomized
-intervals suggest crickets, wind, reeds, droplets, frogs, owls, rain, and distant
-thunder. These are stylized synthetic impressions, not biologically accurate
-calls or recordings of a real habitat.
+intervals suggest crickets, wind, reeds, droplets, frogs, owls, rain, distant
+thunder, and a few insects that sing only while they are on screen (field
+crickets, katydids, bees, cicadas). These are stylized synthetic impressions,
+not biologically accurate calls or recordings of a real habitat.
 
 Load the script synchronously before Flutter in the page bootstrap:
 
@@ -15,13 +16,48 @@ Load the script synchronously before Flutter in the page bootstrap:
 ```
 
 Import `lib/audio/ambience.dart` and retain one `PondAmbience` for the game.
-Call `update(progress, richness, weather, sleeping)` as game state changes.
-Progress and richness accept normalized numbers; invalid numbers become zero.
-Progress is reserved for future scene evolution; richness controls overall gain
-and frog density. Weather strings containing rain/storm/thunder (or
-lluvia/tormenta) enable full rain; drizzle uses 35% rain gain and a gentler
-wind increase. Storm/thunder/tormenta also enable thunder.
+Call `update(progress, richness, weather, sleeping, {rainIntensity, species})`
+as game state changes. Progress and richness accept normalized numbers; invalid
+numbers become zero. Progress is reserved for future scene evolution; richness
+controls overall gain and frog density. Weather strings containing
+rain/storm/thunder (or lluvia/tormenta) enable full rain; drizzle uses 35% rain
+gain and a gentler wind increase. Storm/thunder/tormenta also enable thunder.
 Sleeping softens overall gain and adds occasional owl calls.
+
+The two named arguments are optional at both ends; the JavaScript `update`
+accepts the old four-argument form and then behaves as before (distant thunder
+only, no insect voices).
+
+**Thunder follows the rain.** `rainIntensity` (0–1, the model's rain envelope)
+shapes thunder while the storm label is active. A pure `thunderPlan(rain, now,
+lastHeavyAt, rnd)` chooses each rumble: the distant rumble is unchanged
+(low-pass 180 Hz noise, 3.5 s, gain 0.18, every 22–45 s). While the rain is a
+downpour (intensity ≥ 0.75) a heavier rumble may take a slot instead, with a
+35–75 % chance rising with intensity, never within 60 s of the previous heavy
+one. It stays brief and soft: 0.05 s attack, 1.6 s decay, low-passed at 260 Hz,
+gain capped at 0.26, which is the level of one croak syllable. Lulls fall under
+the threshold and return to distant rumbles on their own. There is never a
+lightning flash; the picture does not react to thunder. `thunderPlan`,
+`parseSpecies` and the `thunderLimits` constants are exposed on
+`window.ranitasAudio` for tests only; `npm run test:ambience` runs them under
+Node with a stub window and no `AudioContext`.
+
+**Insect voices.** `species` is the model's compact presence string of visible
+voiced insects, for example `cricket:3,bee:1` (`PondModel.speciesPresence`;
+only insects at opacity ≥ 0.25 count, so a voice ends with the last singer).
+Each voice plays only while its count is positive, follows the richness-scaled
+intervals of the other events, shares the 24-voice limit, and gets slightly
+denser, never louder, with more singers (gain saturates at three):
+
+| Voice | Species / sceneries | Synthesis | Gain |
+| --- | --- | --- | --- |
+| `cricket` | field crickets at night in maple and autumn_mist | four 50 ms sine pulses at 4.1–4.8 kHz, every 0.9–2.4 s, above the generic cricket bed | ≤ 0.028 |
+| `katydid` | katydids at night in cypress and firefly | three 70 ms bandpassed noise ticks (2.9–3.5 kHz, Q 5), every 2.4–6 s | ≤ 0.04 |
+| `bee` | bees by day in blossom, sanctuary, jade_sanctuary, alpine | 215–250 Hz sawtooth under a 1.1 kHz lowpass, 1.1–1.9 s with a slow attack, panned, every 3–7.5 s | ≤ 0.03 |
+| `cicada` | cicadas on warm afternoons in maple, sanctuary, jade_sanctuary | 104–126 Hz square under a 4.2 kHz lowpass, 2.6–4.2 s swell with a 1 s attack, every 7–15 s | ≤ 0.022 |
+
+Water striders, whirligigs, damselflies, craneflies, stoneflies, cave crickets,
+jewel beetles and fungus gnats are silent.
 
 Browser capture-phase pointerdown and Space/Enter keydown listeners synchronously
 create/resume a single context with zero master gain, before Flutter handles the

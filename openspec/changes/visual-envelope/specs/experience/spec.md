@@ -29,6 +29,37 @@ weather/species rules SHALL NOT be presented as biological validation.
 - **THEN** distant thunder may sound without a flash, using the current 22–45 s scheduling interval and 3.5 s low-pass noise voice
 - **AND** listening checks assess quietness; synthesis gain alone does not prove it.
 
+#### Scenario: Thunder follows the downpour, briefly
+
+- **GIVEN** storm audio is active and the ambience receives the rain intensity
+- **WHEN** a thunder slot falls while intensity is at least 0.75
+- **THEN** a heavier rumble MAY sound instead of the distant one, still low-passed, with a short attack and a decay no longer than 1.6 s, and a gain capped at the level of one frog croak syllable
+- **AND** heavy rumbles are at least 60 s apart, so they never repeat back to back
+- **WHEN** the intensity falls below 0.75 (a lull)
+- **THEN** thunder returns to the distant rumble
+- **AND** no lightning, flash or screen brightening accompanies any thunder
+- **AND** an ambience caller that omits the rain intensity gets distant thunder only.
+
+### Requirement: Smooth species-specific motion including dragonflies
+
+Insects SHALL use correlated angular drift, smoothly relaxed velocities and soft edge steering rather than independent position jitter. Dragonflies SHALL be included when their light/weather conditions allow. Base speed SHALL come from the species table: 0.12 for dragonflies, 0.045 for butterflies, 0.07 for flies, mosquitoes, ladybugs and fireflies, and each other species' own tabled value, in normalized width/second. A species MAY scale the vertical share of its heading (surface skaters stay near zero) and MAY spawn inside its altitude band. These SHALL NOT be treated as hard total-speed ceilings after wind and steering.
+
+#### Scenario: Reproducible bounded trajectories
+
+- **GIVEN** equal seed and input at equal simulation timestamps
+- **WHEN** the pure model advances through different update partitions
+- **THEN** its fixed 1/60 s steps reproduce trajectories within numerical tolerance
+- **AND** velocity relaxes with factor `1-exp(-3*dt)` and position remains within x=0.04–0.96 and y=0.12–0.65, or down to a species' own floor (at most 0.72) for insects that work the water surface
+- **AND** edge safety reflection remains permitted.
+
+#### Scenario: Dragonflies and delicate insects fit the scene
+
+- **GIVEN** light means day, or dawn with progress at least 0.55
+- **WHEN** weather is clear/mist and light is present
+- **THEN** dragonflies become available at progress 0.12 and ladybugs at 0.38, in the sceneries that admit them
+- **AND** butterflies require clear weather and progress 0.25, in the sceneries that admit them
+- **AND** mosquitoes remain available in the sceneries that admit them, flies require non-storm light, and fireflies require clear/mist twilight or darkness.
+
 ### Requirement: Gradual bounded insect emergence
 
 Insects SHALL emerge gradually after activation with zero initial opacity, rising at 1/s. The model SHALL start with zero insects. Population growth SHALL follow richness and weather shelter, up to a target of 18 in clear/mist weather. Ambient insects SHALL continue after sleep within the population budget. Incompatible species SHALL fade at 0.3 opacity/s.
@@ -78,9 +109,9 @@ agreement SHALL NOT be represented as real gameplay or human-study evidence.
 ### Requirement: Biome night insect sets
 
 Each biome SHALL declare which night insects appear as light fades: fireflies,
-moths, mayflies or glow beetles. Night sets SHALL fade in and out on continuous
-daylight rather than at period boundaries, and remain within the population
-budget. Night insects SHALL be catchable like day insects.
+moths, mayflies, glow beetles, crickets or katydids. Night sets SHALL fade in
+and out on continuous daylight rather than at period boundaries, and remain
+within the population budget. Night insects SHALL be catchable like day insects.
 
 #### Scenario: Grotto at night
 
@@ -92,3 +123,38 @@ budget. Night insects SHALL be catchable like day insects.
 
 - **GIVEN** the sanctuary biome at dusk
 - **THEN** moths appear and favour the airspace near the lantern.
+
+### Requirement: Insects that match the scenery
+
+Every scenery SHALL have one or two signature insect species that appear only
+there or in a few related sceneries, and some common species SHALL be absent
+from sceneries they do not suit. Every scenery SHALL keep at least one species
+available in every weather and at every hour. All species SHALL be catchable.
+Some species MAY carry an ambient voice; that voice SHALL play only while the
+species is visible on screen, synthesized, quiet, and under the same richness
+and concurrency rules as the rest of the ambience. The matching SHALL be
+presented as artistic natural history, not biological validation.
+
+#### Scenario: Signature species stay home
+
+- **WHEN** the habitat rules are evaluated for every biome across day, dusk, night, dawn and all four weathers with several rain intensities
+- **THEN** each biome has at least one signature species, at least one of which appears in no more than three sceneries
+- **AND** no signature species is ever available outside its declared sceneries
+- **AND** stoneflies appear only in alpine, jewel beetles only in jade_sanctuary and fungus gnats only in crystal_grotto.
+
+#### Scenario: Common species keep away where they do not fit
+
+- **GIVEN** alpine, grotto or crystal_grotto
+- **THEN** mosquitoes are never available
+- **GIVEN** grotto, crystal_grotto or autumn_mist
+- **THEN** butterflies are never available
+- **AND** the baseline remains where it fits: willow has mosquitoes, blossom butterflies, lotus dragonflies.
+
+#### Scenario: Singers are heard only while present
+
+- **GIVEN** the maple biome through a clear dusk
+- **WHEN** daylight is high
+- **THEN** cicadas are available and crickets are not
+- **WHEN** daylight reaches 0
+- **THEN** crickets are available and the model reports their visible count as `cricket:N`, with no cicada entry once the cicadas have faded
+- **AND** a scenery without voiced species reports an empty presence string.

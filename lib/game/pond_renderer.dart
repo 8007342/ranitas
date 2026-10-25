@@ -1050,7 +1050,104 @@ class PondRenderer {
     final wing = reducedMotion ? 1.0 : math.sin(b.phase * 3).abs() * 2 + 1;
     final a = b.opacity;
     final night = (1 - m.daylight).clamp(0.0, 1.0);
-    if (b.species == 'firefly') {
+    // Signature species (design D2): procedural pixel sprites in the same
+    // 5–9 px idiom as the originals; every one is catchable.
+    if (b.species == 'waterstrider') {
+      // Four splayed legs dimpling the surface, a thin dark body, and a faint
+      // highlight where each foot bends the water.
+      final stride = reducedMotion ? 0.0 : math.sin(b.phase * 2) * .6;
+      _rect(c, x - 1, y, 3, 1, 0xff2b3a3a, a);
+      _line(c, x - 1, y, x - 4 - stride, y - 2, 0xff3a4a48, a * .85);
+      _line(c, x + 1, y, x + 4 + stride, y - 2, 0xff3a4a48, a * .85);
+      _line(c, x - 1, y, x - 4 + stride, y + 2, 0xff3a4a48, a * .85);
+      _line(c, x + 1, y, x + 4 - stride, y + 2, 0xff3a4a48, a * .85);
+      _rect(c, x - 5, y + 2, 1, 1, 0xffdcf2f0, a * .35);
+      _rect(c, x + 4, y + 2, 1, 1, 0xffdcf2f0, a * .35);
+    } else if (b.species == 'whirligig') {
+      // A glossy black bead spinning on dark water with a bronze glint.
+      _oval(c, x, y, 2, 1.5, 0xff141c22, a);
+      _rect(c, x - 1, y - 1, 1, 1, 0xff9a7a4a, a * .9);
+      final sheen = reducedMotion ? 0.0 : math.cos(b.phase) * 1.5;
+      _rect(c, x + sheen, y + 1, 1, 1, 0xffcfe8ec, a * .3);
+      _rect(c, x - 3, y + 1, 7, 1, 0xffdcf2f0, a * .12);
+    } else if (b.species == 'damselfly') {
+      // Needle body held level, paired wings folded then flicked; electric
+      // blue or emerald by variant.
+      final body = b.variant == 0 ? 0xff4fa8e8 : 0xff5fc89a;
+      _rect(c, x - 4, y, 9, 1, body, a);
+      _rect(c, x - 4, y, 1, 1, 0xff1f2a3a, a);
+      _rect(c, x + 4, y, 1, 1, 0xff1f2a3a, a * .8);
+      _rect(c, x - 1, y - wing, 3, wing.ceil().toDouble(), 0xffe3f1f4, a * .55);
+      _rect(c, x - 1, y - 1, 1, 1, 0xff1f2a3a, a);
+    } else if (b.species == 'bee') {
+      // Amber-and-black striped abdomen under a wing blur.
+      _oval(c, x, y, 2, 1.5, 0xffe0a83a, a);
+      _rect(c, x - 1, y - 1, 1, 3, 0xff2a2218, a);
+      _rect(c, x + 1, y - 1, 1, 3, 0xff2a2218, a);
+      _rect(c, x - 3, y, 1, 1, 0xff2a2218, a);
+      _rect(c, x - 1, y - wing - 1, 3, 1, 0xffeef5f2, a * .6);
+      _rect(c, x + 2, y - 1, 1, 1, 0xffeef5f2, a * .45);
+    } else if (b.species == 'cicada') {
+      // Stout olive body, wide clear wings laid back along it.
+      _rect(c, x - 2, y - 1, 5, 2, 0xff6b7a3c, a);
+      _rect(c, x - 3, y - 1, 1, 2, 0xff2f3a2a, a);
+      _rect(c, x - 2, y + 1, 6, 1, 0xffd6e2d2, a * .55);
+      _rect(c, x - 1, y - wing - 1, 5, 1, 0xffd6e2d2, a * .5);
+      _rect(c, x - 3, y - 2, 1, 1, 0xffe5894a, a);
+    } else if (b.species == 'cricket') {
+      // Dark brown hopper with long antennae and a bent hind leg.
+      _rect(c, x - 2, y, 4, 2, 0xff4a3222, a);
+      _rect(c, x - 3, y, 1, 1, 0xff2a1c14, a);
+      _line(c, x - 3, y, x - 5, y - 3, 0xff6b4e38, a * .7);
+      _line(c, x - 3, y, x - 6, y - 1, 0xff6b4e38, a * .7);
+      _rect(c, x + 1, y - 1, 1, 1, 0xff6b4e38, a);
+      _rect(c, x + 2, y, 1, 2, 0xff6b4e38, a);
+    } else if (b.species == 'katydid') {
+      // Leaf-green wings folded upright over the body, antennae forward.
+      final lift = reducedMotion ? 0.0 : math.sin(b.phase * 3).abs() * 1.5;
+      _rect(c, x - 2, y - 2 - lift, 5, 1, 0xffa9d882, a * .9);
+      _rect(c, x - 2, y - 1, 5, 2, 0xff7fbc5a, a);
+      _rect(c, x - 3, y, 1, 1, 0xff3f5e32, a);
+      _line(c, x - 3, y - 1, x - 6, y - 3, 0xff8fb66e, a * .6);
+      _rect(c, x + 1, y + 1, 1, 1, 0xff3f5e32, a);
+    } else if (b.species == 'cranefly') {
+      // Gangly: a thread of body on dangling legs, two slow wings.
+      _rect(c, x - 1, y - 1, 3, 1, 0xff9a8f7a, a);
+      _rect(c, x - 2, y - wing, 2, 1, 0xffe9ecdf, a * .5);
+      _rect(c, x + 1, y - wing, 2, 1, 0xffe9ecdf, a * .5);
+      _line(c, x - 1, y, x - 3, y + 4, 0xff7a7060, a * .55);
+      _line(c, x, y, x, y + 4, 0xff7a7060, a * .55);
+      _line(c, x + 1, y, x + 3, y + 4, 0xff7a7060, a * .55);
+    } else if (b.species == 'stonefly') {
+      // Slate body, wings flat along the back, two tail filaments.
+      _rect(c, x - 3, y, 6, 1, 0xff4a5560, a);
+      _rect(c, x - 2, y - 1, 5, 1, 0xffb9c6cc, a * .55);
+      _rect(c, x - 3, y, 1, 1, 0xff202830, a);
+      _line(c, x + 3, y, x + 5, y + 1, 0xff8a97a0, a * .6);
+      _line(c, x + 3, y, x + 5, y - 1, 0xff8a97a0, a * .6);
+    } else if (b.species == 'cavecricket') {
+      // Pale humpbacked hopper with very long antennae; no eyes to speak of.
+      _oval(c, x, y, 2, 1.5, 0xffc9b89a, a);
+      _rect(c, x - 3, y, 1, 1, 0xffa08f74, a);
+      _line(c, x - 3, y, x - 7, y - 3, 0xffd8ccb4, a * .55);
+      _line(c, x - 3, y, x - 7, y - 1, 0xffd8ccb4, a * .55);
+      _rect(c, x + 2, y - 1, 1, 1, 0xffa08f74, a);
+      _rect(c, x + 2, y + 1, 1, 1, 0xffa08f74, a);
+    } else if (b.species == 'jewelbeetle') {
+      // Metallic jade carapace with a travelling glint.
+      _oval(c, x, y, 2.5, 2, 0xff2f8f6a, a);
+      _rect(c, x - 1, y - 1, 3, 1, 0xff6fd9a8, a * .9);
+      _rect(c, x, y - 2, 1, 1, 0xff1d4a3a, a);
+      final glint = reducedMotion ? 0.0 : (math.sin(b.phase * .7) * 1.5);
+      _rect(c, x + glint, y, 1, 1, 0xffe9fff2, a * .8);
+      _rect(c, x - 1, y - wing - 1, 3, 1, 0xffb8f0d6, a * .3);
+    } else if (b.species == 'fungusgnat') {
+      // A speck with a faint cyan halo borrowed from the fungi it hangs over.
+      _oval(c, x, y, 3, 3, 0xff7fe9e4, a * (.05 + .07 * night));
+      _rect(c, x, y, 1, 1, 0xff22303a, a);
+      _rect(c, x - 1, y - 1, 1, 1, 0xffbdf4f0, a * (.35 + .35 * night));
+      _rect(c, x + 1, y - wing + 1, 1, 1, 0xffbdf4f0, a * .3);
+    } else if (b.species == 'firefly') {
       // Glow widens at night so the lantern-yellow point reads on the grade.
       _oval(c, x, y, 6, 6, 0xffe5e9a0, a * (.09 + .10 * night));
       _oval(c, x, y, 3, 3, 0xfffff2b8, a * .18 * night);

@@ -163,10 +163,15 @@ void main() {
   test(
     'species unlock with progression and night sets belong to dusk/night',
     () {
+      // Willow: a scenery with mosquitoes and the full common day set, so the
+      // documented opening and unlock order hold (other sceneries substitute
+      // their own residents; see atmosphere_test).
       final model = List.generate(
-        100,
+        400,
         (seed) => PondModel(seed: seed, durationOverride: 20),
-      ).firstWhere((m) => m.cycle == 'dusk' && m.weather == 'clear');
+      ).firstWhere(
+        (m) => m.cycle == 'dusk' && m.weather == 'clear' && m.biome == 'willow',
+      );
       expect(model.availableSpecies, ['fly', 'mosquito']);
       tap(model);
       model.update(8);
@@ -340,12 +345,22 @@ void main() {
             isFalse,
           );
         } else {
+          // Night: no daytime-only species remain; everything left is either
+          // still welcome (mosquito, the night set, an all-hours resident) or
+          // on its way out.
+          final welcome = model.availableSpecies;
+          expect(welcome, isNot(contains('fly')));
+          expect(welcome, isNot(contains('butterfly')));
+          expect(welcome, isNot(contains('dragonfly')));
+          expect(welcome, isNot(contains('ladybug')));
           expect(
             model.bugs.every(
-              (b) =>
-                  b.species == 'mosquito' ||
-                  InsectSpecies.nightNames.contains(b.species),
+              (b) => welcome.contains(b.species) || b.opacity < 1,
             ),
+            isTrue,
+          );
+          expect(
+            model.bugs.any((b) => InsectSpecies.nightNames.contains(b.species)),
             isTrue,
           );
         }
@@ -377,8 +392,23 @@ void main() {
           model.availableSpecies.any(InsectSpecies.nightNames.contains),
           isFalse,
         );
+        // Only hardy species fly in rain: the common fly and mosquito plus a
+        // biome's weatherproof residents (stoneflies, cave crickets, skaters
+        // in light rain). Nothing delicate, nothing from a night set.
+        const delicate = {
+          'butterfly',
+          'ladybug',
+          'dragonfly',
+          'damselfly',
+          'bee',
+          'jewelbeetle',
+        };
         expect(
-          model.bugs.every((b) => ['fly', 'mosquito'].contains(b.species)),
+          model.bugs.every(
+            (b) =>
+                !delicate.contains(b.species) &&
+                !InsectSpecies.nightNames.contains(b.species),
+          ),
           isTrue,
         );
         // Shelter now follows the rain intensity envelope, so the budget is

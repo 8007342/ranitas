@@ -18,11 +18,13 @@ Future<ui.Image> _loadAssetImage(String relativePath) async {
   return frame.image;
 }
 
-PondModel _firstWith(bool Function(PondModel m) where, {int seeds = 2000}) =>
-    List.generate(
-      seeds,
-      (seed) => PondModel(seed: seed, durationOverride: 20),
-    ).firstWhere(where);
+PondModel _firstWith(bool Function(PondModel m) where, {int seeds = 2000}) {
+  for (var seed = 0; seed < seeds; seed++) {
+    final model = PondModel(seed: seed, durationOverride: 20);
+    if (where(model)) return model;
+  }
+  throw StateError('no seed below $seeds matched');
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -128,14 +130,14 @@ void main() {
       const expected = {
         'willow': {'firefly', 'mayfly'},
         'blossom': {'mayfly'},
-        'cypress': {'firefly'},
-        'maple': {'moth'},
+        'cypress': {'firefly', 'katydid'},
+        'maple': {'moth', 'cricket'},
         'sanctuary': {'moth'},
         'grotto': {'glowbeetle'},
         'alpine': {'firefly', 'moth'},
         'lotus': {'firefly', 'mayfly'},
-        'firefly': {'firefly'},
-        'autumn_mist': {'moth'},
+        'firefly': {'firefly', 'katydid'},
+        'autumn_mist': {'moth', 'cricket'},
         'jade_sanctuary': {'moth'},
         'crystal_grotto': {'glowbeetle'},
       };
@@ -262,6 +264,266 @@ void main() {
           .reduce((a, b) => a + b);
       final count = lotus.bugs.where((b) => b.species == 'mayfly').length;
       expect(mayflyY / count, greaterThan(.45));
+    });
+  });
+
+  group('signature insects per scenery (D2)', () {
+    // A broad sweep of light and weather so "never appears" means never.
+    final contexts = <String, List<HabitatContext>>{
+      for (final biome in PondModel.biomes)
+        biome: [
+          for (final weather in ['clear', 'mist', 'drizzle', 'storm'])
+            for (final rain in [0.0, .1, .3, .6, .95])
+              for (final (daylight, progress, period, cycle) in [
+                (1.0, 0.0, 'day', 'dusk'),
+                (1.0, .3, 'day', 'dusk'),
+                (.8, .5, 'day', 'dusk'),
+                (.4, .6, 'dusk', 'dusk'),
+                (.1, .9, 'night', 'dusk'),
+                (0.0, 1.0, 'night', 'dusk'),
+                (0.0, 0.0, 'night', 'dawn'),
+                (.5, .5, 'dawn', 'dawn'),
+                (.7, .7, 'dawn', 'dawn'),
+                (1.0, 1.0, 'day', 'dawn'),
+              ])
+                HabitatContext(
+                  biome: biome,
+                  daylight: daylight,
+                  progress: progress,
+                  period: period,
+                  cycle: cycle,
+                  weather: weather,
+                  rainIntensity: weather == 'clear' ? 0 : rain,
+                ),
+        ],
+    };
+    Set<String> everAvailable(String biome, String species) => {
+      for (final c in contexts[biome]!)
+        if (InsectSpecies.byName[species]!.habitat(c)) biome,
+    };
+
+    test('every biome has one or two signature species of its own', () {
+      for (final biome in PondModel.biomes) {
+        final signature = InsectSpecies.signatureFor(biome);
+        expect(signature, isNotEmpty, reason: biome);
+        // Each signature species of a biome actually shows up there…
+        for (final s in signature) {
+          expect(everAvailable(biome, s), {biome}, reason: '$s in $biome');
+        }
+        // …and at least one of them is found in no more than three sceneries.
+        expect(
+          signature.any((s) => InsectSpecies.biomesOf(s).length <= 3),
+          isTrue,
+          reason: '$biome needs a species rare to it: $signature',
+        );
+      }
+    });
+
+    test('signature species never appear outside their sceneries', () {
+      for (final species in InsectSpecies.signatureNames) {
+        final home = InsectSpecies.biomesOf(species);
+        expect(home.length, lessThan(PondModel.biomes.length), reason: species);
+        for (final biome in PondModel.biomes) {
+          expect(
+            everAvailable(biome, species),
+            home.contains(biome) ? {biome} : <String>{},
+            reason: '$species in $biome',
+          );
+        }
+      }
+      // Truly unique to one scenery.
+      expect(InsectSpecies.biomesOf('stonefly'), {'alpine'});
+      expect(InsectSpecies.biomesOf('jewelbeetle'), {'jade_sanctuary'});
+      expect(InsectSpecies.biomesOf('fungusgnat'), {'crystal_grotto'});
+    });
+
+    test('common species stay away from sceneries they do not suit', () {
+      for (final biome in ['alpine', 'grotto', 'crystal_grotto']) {
+        expect(everAvailable(biome, 'mosquito'), isEmpty, reason: biome);
+      }
+      for (final biome in ['grotto', 'crystal_grotto', 'autumn_mist']) {
+        expect(everAvailable(biome, 'butterfly'), isEmpty, reason: biome);
+      }
+      for (final biome in ['grotto', 'crystal_grotto']) {
+        expect(everAvailable(biome, 'dragonfly'), isEmpty, reason: biome);
+      }
+      for (final biome in ['cypress', 'firefly', 'lotus', 'grotto']) {
+        expect(everAvailable(biome, 'ladybug'), isEmpty, reason: biome);
+      }
+      // The baseline survives where it fits.
+      expect(everAvailable('willow', 'mosquito'), {'willow'});
+      expect(everAvailable('blossom', 'butterfly'), {'blossom'});
+      expect(everAvailable('lotus', 'dragonfly'), {'lotus'});
+    });
+
+    test('every scenery keeps at least one species in every weather and hour', () {
+      for (final biome in PondModel.biomes) {
+        for (final c in contexts[biome]!) {
+          final available = [
+            for (final s in InsectSpecies.table)
+              if (s.habitat(c)) s.name,
+          ];
+          expect(
+            available,
+            isNotEmpty,
+            reason: '$biome ${c.weather} ${c.rainIntensity} ${c.period}',
+          );
+        }
+      }
+    });
+
+    test('voiced species are declared and the presence string is compact', () {
+      for (final name in InsectSpecies.voicedNames) {
+        expect(InsectSpecies.byName[name]!.voice, name);
+      }
+      for (final s in InsectSpecies.table) {
+        if (s.voice != null) expect(InsectSpecies.voicedNames, contains(s.voice));
+      }
+      final maple = _firstWith(
+        (m) => m.biome == 'maple' && m.cycle == 'dusk' && m.weather == 'clear',
+      );
+      maple.press();
+      maple.release();
+      maple.update(5);
+      // Daylight: cicadas may sing, crickets may not.
+      expect(maple.availableSpecies, contains('cicada'));
+      expect(maple.availableSpecies, isNot(contains('cricket')));
+      maple.update(90);
+      expect(maple.daylight, 0);
+      expect(maple.availableSpecies, contains('cricket'));
+      expect(maple.bugs.any((b) => b.species == 'cricket'), isTrue);
+      final presence = maple.speciesPresence;
+      expect(presence, matches(RegExp(r'^([a-z]+:\d+)(,[a-z]+:\d+)*$')));
+      expect(presence, contains('cricket:'));
+      expect(presence, isNot(contains('cicada:')));
+      for (final part in presence.split(',')) {
+        final count = int.parse(part.split(':')[1]);
+        expect(
+          count,
+          maple.bugs
+              .where(
+                (b) =>
+                    b.alive &&
+                    b.opacity >= .25 &&
+                    InsectSpecies.byName[b.species]!.voice == part.split(':')[0],
+              )
+              .length,
+        );
+      }
+      final willow = _firstWith(
+        (m) => m.biome == 'willow' && m.cycle == 'dusk' && m.weather == 'clear',
+      );
+      willow.press();
+      willow.release();
+      willow.update(40);
+      expect(willow.speciesPresence, isEmpty, reason: 'willow has no singers');
+    });
+
+    test('skaters keep to the water surface and residents fly in storms', () {
+      // A long afternoon so the skaters have time to arrive.
+      final lotus = PondModel(
+        seed: _firstWith(
+          (m) =>
+              m.biome == 'lotus' && m.cycle == 'dusk' && m.weather == 'clear',
+        ).sceneSeed,
+        durationOverride: 120,
+      );
+      expect(lotus.biome, 'lotus');
+      lotus.press();
+      lotus.release();
+      lotus.update(6);
+      for (var i = 0; i < 40; i++) {
+        lotus.update(1);
+        for (final b in lotus.bugs.where((b) => b.species == 'waterstrider')) {
+          if (b.opacity < 1) continue;
+          expect(b.y, greaterThan(.5), reason: 'striders stay on the water');
+          expect(b.y, lessThanOrEqualTo(.72));
+        }
+      }
+      expect(lotus.bugs.any((b) => b.species == 'waterstrider'), isTrue);
+
+      final alpine = _firstWith(
+        (m) => m.biome == 'alpine' && m.weather == 'storm',
+        seeds: 6000,
+      );
+      alpine.press();
+      alpine.release();
+      alpine.update(60);
+      expect(alpine.availableSpecies, isNot(contains('mosquito')));
+      expect(alpine.availableSpecies, contains('stonefly'));
+      expect(alpine.bugs.any((b) => b.species == 'stonefly'), isTrue);
+
+      final grotto = _firstWith(
+        (m) => m.biome == 'grotto' && m.weather == 'storm',
+        seeds: 6000,
+      );
+      grotto.press();
+      grotto.release();
+      grotto.update(60);
+      expect(grotto.availableSpecies, contains('cavecricket'));
+      expect(grotto.bugs, isNotEmpty);
+    });
+
+    test('signature biomes stay deterministic across update partitions', () {
+      for (final biome in ['alpine', 'crystal_grotto', 'cypress', 'blossom']) {
+        final seed = List.generate(
+          3000,
+          (s) => s,
+        ).firstWhere((s) => PondModel(seed: s, durationOverride: 20).biome == biome);
+        final a = PondModel(seed: seed, durationOverride: 20);
+        final b = PondModel(seed: seed, durationOverride: 20);
+        for (final m in [a, b]) {
+          m.press();
+          m.release();
+        }
+        for (var second = 0; second < 40; second++) {
+          a.update(1);
+          for (var frame = 0; frame < 60; frame++) {
+            b.update(1 / 60);
+          }
+          List<Object> bugsOf(PondModel m) => [
+            for (final bug in m.bugs)
+              [bug.species, bug.x, bug.y, bug.vx, bug.vy, bug.opacity],
+          ];
+          expect(bugsOf(a), bugsOf(b), reason: '$biome second=$second');
+          expect(a.speciesPresence, b.speciesPresence);
+        }
+        expect(a.bugs, isNotEmpty);
+      }
+    });
+
+    test('every species renders as a procedural sprite', () async {
+      final model = _firstWith((m) => m.biome == 'willow');
+      model.press();
+      model.release();
+      model.update(2);
+      model.bugs.clear();
+      var i = 0;
+      for (final s in InsectSpecies.table) {
+        for (final variant in [0, 1]) {
+          model.bugs.add(
+            BugState(
+              x: .1 + (i % 8) * .11,
+              y: .2 + (i ~/ 8) * .1,
+              vx: 0,
+              vy: 0,
+              phase: i * .7,
+              species: s.name,
+              variant: variant,
+            ),
+          );
+          i++;
+        }
+      }
+      final renderer = PondRenderer();
+      final recorder = ui.PictureRecorder();
+      renderer.render(ui.Canvas(recorder), const ui.Size(641, 359), model);
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(641, 359);
+      expect(image.width, 641);
+      image.dispose();
+      picture.dispose();
+      renderer.dispose();
     });
   });
 

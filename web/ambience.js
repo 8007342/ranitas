@@ -7,12 +7,70 @@
   let disposed = false, unlocked = false, started = false, suspended = false;
   let unlockPointer = null, unlockKey = null, gestureEnded = false;
   let unlockPending = false, unlockAttempt = 0;
-  let state = { progress: 0, richness: 0, weather: 'clear', sleeping: false };
+  let state = { progress: 0, richness: 0, weather: 'clear', sleeping: false,
+    rainIntensity: 0, species: {} };
   const voices = new Set();
   const beds = [];
-  const next = { cricket: 0, water: 0, frog: 0, owl: 0, thunder: 0 };
+  const next = { cricket: 0, water: 0, frog: 0, owl: 0, thunder: 0,
+    chorus: 0, katydid: 0, bee: 0, cicada: 0 };
+  // Scheduling memory for the thunder plan: when the last heavy rumble fell.
+  const thunderMemory = { heavyAt: -Infinity };
   const random = (a, b) => a + Math.random() * (b - a);
   const active = () => context && unlocked && !unlockPending && started && !suspended && !document.hidden && !disposed;
+
+  // Thunder follows the rain intensity envelope (design D1). Pure: the same
+  // inputs and the same `rnd` draws give the same plan, so it is testable
+  // without an AudioContext (scripts/ambience.test.mjs).
+  //
+  //  - Distant rumble (the original voice): low-pass 180 Hz noise, 3.5 s,
+  //    gain 0.18, every 22–45 s while the storm label is active.
+  //  - Heavy rumble: allowed only while the rain is a downpour (intensity at
+  //    or above HEAVY_RAIN), at most once per HEAVY_SPACING seconds, and
+  //    brief: a 0.05 s attack into a 1.6 s decay, still low-passed (260 Hz),
+  //    gain capped at HEAVY_GAIN, which is the level of one croak syllable.
+  //    Lulls drop the rain under the threshold, so they return to distant
+  //    rumbles on their own. Never any lightning or flash.
+  const THUNDER = Object.freeze({
+    HEAVY_RAIN: 0.75,
+    HEAVY_SPACING: 60,
+    HEAVY_GAIN: 0.26,
+    HEAVY_DURATION: 1.6,
+    HEAVY_ATTACK: 0.05,
+    HEAVY_CUTOFF: 260,
+    DISTANT_GAIN: 0.18,
+    DISTANT_DURATION: 3.5,
+    DISTANT_CUTOFF: 180,
+    INTERVAL_MIN: 22,
+    INTERVAL_MAX: 45,
+  });
+  function thunderPlan(rain, now, lastHeavyAt, rnd = Math.random) {
+    const intensity = clamp(rain);
+    const since = now - (Number.isFinite(lastHeavyAt) ? lastHeavyAt : -Infinity);
+    const eligible = intensity >= THUNDER.HEAVY_RAIN && since >= THUNDER.HEAVY_SPACING;
+    // Chance grows from 35 % at the threshold to 75 % in a full downpour.
+    const chance = 0.35 + 0.4 * clamp((intensity - THUNDER.HEAVY_RAIN) / (1 - THUNDER.HEAVY_RAIN));
+    const roll = rnd();
+    const interval = THUNDER.INTERVAL_MIN + rnd() * (THUNDER.INTERVAL_MAX - THUNDER.INTERVAL_MIN);
+    if (eligible && roll < chance) {
+      return { kind: 'heavy', cutoff: THUNDER.HEAVY_CUTOFF, duration: THUNDER.HEAVY_DURATION,
+        gain: THUNDER.HEAVY_GAIN, attack: THUNDER.HEAVY_ATTACK, nextAt: now + interval };
+    }
+    return { kind: 'distant', cutoff: THUNDER.DISTANT_CUTOFF, duration: THUNDER.DISTANT_DURATION,
+      gain: THUNDER.DISTANT_GAIN, attack: 0.08, nextAt: now + interval };
+  }
+
+  // `cricket:3,bee:1` → { cricket: 3, bee: 1 }. Unknown or malformed entries
+  // are dropped; counts are clamped to a small integer.
+  function parseSpecies(text) {
+    const out = {};
+    if (typeof text !== 'string' || !text) return out;
+    for (const part of text.split(',')) {
+      const [name, count] = part.split(':');
+      const n = Math.floor(Number(count));
+      if (/^[a-z]+$/.test(name || '') && Number.isFinite(n) && n > 0) out[name] = Math.min(n, 32);
+    }
+    return out;
+  }
 
   function smooth(param, value, seconds = 0.8) {
     const now = context.currentTime;
@@ -151,7 +209,11 @@
   }
 
   // Each short voice owns every node it creates, with a hard concurrency limit.
-  function voice(kind, frequency, duration, volume, sweep = frequency, delay = 0) {
+  // `shape` (optional) refines the filter and envelope: { filter, cutoff, q,
+  // attack, hold }. Noise voices default to a lowpass at `frequency`;
+  // oscillators to a 6.5 kHz lowpass. `hold` keeps the voice at full level for
+  // that share of its duration before the decay (insect drones).
+  function voice(kind, frequency, duration, volume, sweep = frequency, delay = 0, shape = null) {
     if (!active() || context.state !== 'running' || voices.size >= 24) return;
     const source = kind === 'noise' ? context.createBufferSource() : context.createOscillator();
     const filter = context.createBiquadFilter();
@@ -164,10 +226,15 @@
       source.frequency.setValueAtTime(frequency, at);
       source.frequency.exponentialRampToValueAtTime(Math.max(20, sweep), at + duration);
     }
-    filter.type = 'lowpass';
-    filter.frequency.value = kind === 'noise' ? frequency : 6500;
+    filter.type = (shape && shape.filter) || 'lowpass';
+    filter.frequency.value = (shape && shape.cutoff) || (kind === 'noise' ? frequency : 6500);
+    if (shape && shape.q) filter.Q.value = shape.q;
+    const attack = shape && shape.attack
+      ? Math.min(shape.attack, duration * 0.4) : Math.min(0.08, duration * 0.2);
+    const hold = shape && shape.hold ? Math.min(duration * shape.hold, duration - attack - 0.05) : 0;
     gain.gain.setValueAtTime(0, at);
-    gain.gain.linearRampToValueAtTime(volume, at + Math.min(0.08, duration * 0.2));
+    gain.gain.linearRampToValueAtTime(volume, at + attack);
+    if (hold > 0) gain.gain.setValueAtTime(volume, at + attack + hold);
     gain.gain.exponentialRampToValueAtTime(0.00001, at + duration);
     source.connect(filter).connect(gain);
     if (pan) {
@@ -232,8 +299,51 @@
       }
     }
     if (t >= next.thunder) {
-      next.thunder = t + random(22, 45);
-      if (storm) voice('noise', 180, 3.5, 0.18);
+      if (storm) {
+        const plan = thunderPlan(state.rainIntensity, t, thunderMemory.heavyAt);
+        next.thunder = plan.nextAt;
+        if (plan.kind === 'heavy') thunderMemory.heavyAt = t;
+        voice('noise', plan.cutoff, plan.duration, plan.gain, plan.cutoff, 0,
+          { attack: plan.attack });
+      } else next.thunder = t + random(THUNDER.INTERVAL_MIN, THUNDER.INTERVAL_MAX);
+    }
+    speciesVoices(t, r);
+  }
+
+  // Insect voices: each plays only while its species is present on screen
+  // (the model reports visible counts), gently, and under the same richness
+  // and concurrency rules as everything else. More singers mean a slightly
+  // denser chorus, never a louder one: gain saturates at three.
+  function speciesVoices(t, r) {
+    const s = state.species;
+    const dens = (n) => Math.min(1, n / 3);
+    if (s.cricket && t >= next.chorus) {
+      // Field crickets: a four-pulse trill above the generic cricket bed.
+      next.chorus = t + random(0.9, 2.4) / (0.6 + r) / (0.7 + 0.3 * dens(s.cricket));
+      const hz = random(4100, 4800);
+      for (let i = 0; i < 4; i++) voice('sine', hz, 0.05, 0.028 * (0.6 + 0.4 * dens(s.cricket)), hz * 0.99, i * 0.09);
+    }
+    if (s.katydid && t >= next.katydid) {
+      // Katydid rasp: three dry bandpassed noise ticks, "ch-ch-ch".
+      next.katydid = t + random(2.4, 6) / (0.6 + r);
+      for (let i = 0; i < 3; i++) {
+        voice('noise', 3200, 0.07, 0.04 * (0.6 + 0.4 * dens(s.katydid)), 3200, i * 0.15,
+          { filter: 'bandpass', cutoff: random(2900, 3500), q: 5, attack: 0.01 });
+      }
+    }
+    if (s.bee && t >= next.bee) {
+      // A bee passing: low sawtooth hum through a soft lowpass, panned.
+      next.bee = t + random(3, 7.5) / (0.6 + r);
+      const hz = random(215, 250);
+      voice('sawtooth', hz, random(1.1, 1.9), 0.03 * (0.7 + 0.3 * dens(s.bee)), hz * random(0.94, 1.08), 0,
+        { cutoff: 1100, attack: 0.35, hold: 0.3 });
+    }
+    if (s.cicada && t >= next.cicada) {
+      // Cicada drone: a buzzy square swelling over seconds, kept far back.
+      next.cicada = t + random(7, 15) / (0.6 + r);
+      const hz = random(104, 126);
+      voice('square', hz, random(2.6, 4.2), 0.022 * (0.7 + 0.3 * dens(s.cicada)), hz * 1.08, 0,
+        { cutoff: 4200, attack: 1.0, hold: 0.35 });
     }
   }
 
@@ -267,10 +377,14 @@
   document.addEventListener('visibilitychange', visibility);
 
   window.ranitasAudio = Object.freeze({
-    update(progress, richness, weather, sleeping) {
+    // `rainIntensity` (0–1) and `species` (`voice:count,…`) are optional; an
+    // older caller that omits them gets the pre-envelope behaviour.
+    update(progress, richness, weather, sleeping, rainIntensity, species) {
       if (disposed) return;
       state = { progress: clamp(progress), richness: clamp(richness),
-        weather: typeof weather === 'string' ? weather : 'clear', sleeping: sleeping === true };
+        weather: typeof weather === 'string' ? weather : 'clear', sleeping: sleeping === true,
+        rainIntensity: rainIntensity === undefined ? (/storm|thunder|tormenta/i.test(String(weather)) ? 0.6 : 0) : clamp(rainIntensity),
+        species: parseSpecies(species) };
       // A pre-gesture update cannot queue sound for the intro press. Require a
       // fresh positive update after the unlocking pointer or key has been released.
       if (!started && unlocked && gestureEnded && state.richness > 0) started = true;
@@ -297,5 +411,9 @@
       noise = null;
       if (context) context.close().catch(() => {});
     },
+    // Pure helpers exposed for tests; they touch no audio state.
+    thunderPlan,
+    parseSpecies,
+    thunderLimits: THUNDER,
   });
 })();

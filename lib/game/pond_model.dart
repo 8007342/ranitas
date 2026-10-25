@@ -1207,8 +1207,28 @@ class PondModel {
     ];
   }
 
+  /// Compact presence of the voiced species for the ambience, for example
+  /// `cricket:3,bee:1`. Only visible insects (opacity ≥ 0.25) count, so a
+  /// voice fades out with the last singer rather than with its species rule.
+  String get speciesPresence {
+    final counts = <String, int>{};
+    for (final bug in bugs) {
+      if (!bug.alive || bug.opacity < .25) continue;
+      final voice = InsectSpecies.byName[bug.species]?.voice;
+      if (voice == null) continue;
+      counts[voice] = (counts[voice] ?? 0) + 1;
+    }
+    return [
+      for (final name in InsectSpecies.voicedNames)
+        if (counts.containsKey(name)) '$name:${counts[name]}',
+    ].join(',');
+  }
+
   void _spawnBug() {
     final species = availableSpecies;
+    // Every biome keeps a resident species in all weathers, so this is only a
+    // guard; skipping the spawn draws nothing from the main stream.
+    if (species.isEmpty) return;
     final kind = species[random.nextInt(species.length)];
     final info = InsectSpecies.byName[kind]!;
     final angle = random.nextDouble() * pi * 2;
@@ -1220,7 +1240,7 @@ class PondModel {
     bugs.add(
       BugState(
           x: x,
-          y: info.night
+          y: info.spawnInBand
               ? bandLow + yRoll * (bandHigh - bandLow)
               : .2 + yRoll * .4,
           vx: cos(angle) * speed,
@@ -1250,7 +1270,7 @@ class PondModel {
       final (bandLow, bandHigh) = info.altitude;
       var targetX = cos(bug._heading) * speed + wind * .025;
       var targetY =
-          sin(bug._heading) * speed * .55 + sin(bug.phase) * info.bob;
+          sin(bug._heading) * speed * info.vertical + sin(bug.phase) * info.bob;
       targetX += max(0, .14 - bug.x) * .8 - max(0, bug.x - .86) * .8;
       targetY +=
           max(0, bandLow - bug.y) * .8 - max(0, bug.y - bandHigh) * .8;
