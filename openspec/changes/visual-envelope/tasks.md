@@ -24,12 +24,12 @@
 
 ## 4. Pads and frog depth (branch `work/pond-pads-depth`)
 
-- [ ] 4.1 Seeded hero + ambient pad layout with sections; mutable slow state; perspective radii
-- [ ] 4.2 Momentum slide, drag, soft walls, curl-noise current, separation, sleep freeze
-- [ ] 4.3 Pad-relative perches, frogs ride pads, in-flight homing
-- [ ] 4.4 Perspective frog scale (quantised), scaled arc height, view selection, haze, scaled shadow, depth sort
-- [ ] 4.5 Procedural away/toward poses; optional depth sheet loading
-- [ ] 4.6 Rewrite fixed-home tests as pad-relative invariants; add slide, boundedness and moving-landing tests
+- [x] 4.1 Seeded hero + ambient pad layout with sections; mutable slow state; perspective radii
+- [x] 4.2 Momentum slide, drag, soft walls, curl-noise current, separation, sleep freeze
+- [x] 4.3 Pad-relative perches, frogs ride pads, in-flight homing
+- [x] 4.4 Perspective frog scale (quantised), scaled arc height, view selection, haze, scaled shadow, depth sort
+- [x] 4.5 Procedural away/toward poses; optional depth sheet loading
+- [x] 4.6 Rewrite fixed-home tests as pad-relative invariants; add slide, boundedness and moving-landing tests
 
 ## 5. Integration (branch `work/visual-envelope`)
 

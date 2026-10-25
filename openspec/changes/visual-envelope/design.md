@@ -203,6 +203,17 @@ seeded value noise, 90 px scale, 25 s time scale, 0.8–2.0 px/s (hero ×0.6),
 plus `wind×3`. Pad–pad separation by mass-weighted penalty. Motion freezes
 while sleeping. Yaw rotates veins and lotus only (scanline ovals cannot rotate).
 
+*As implemented (`work/pond-pads-depth`):* η = 0.2 and linear drag 1.6 s⁻¹,
+because the seeded hero spacing (75–135 px, perch ≈ 30 px inside the rim) gives
+hop speeds of 60–200 px/s, and η = 0.08 / 1.2 s⁻¹ produced 1–2 px slides that
+did not settle under 0.1 px/s within 3 s. `vx, vy` is the slide *relative to the
+water*: the pad rides the current exactly and drag acts on the slide, so a
+settled pad has zero slide speed while still wandering. The soft wall is a 3 px
+band inside the section radius (at least 60 % of it) so ordinary slides finish
+on free water. Ambient sections are nominally 22–30 px but shrink to the free
+room around each pad (half the gap to neighbours, basin room); in the current
+basins that is typically 1–9 px. Clamps run basin first, then section.
+
 Depth: `perspectiveAt(yPx)` shared by pads, frogs and stems:
 `s = 0.56 + 0.48·d`, `d = (y − basin.topY)/(basin.bottomY − basin.topY)`.
 Radii, stem length and haze (`vd × 0.12` toward `#2f5d66`) follow it every tick;
@@ -223,6 +234,13 @@ residual horizontal flip. Haze `(1 − d)·(0.25 + 0.35·night)` blends toward t
 water tone and opacity drops by `0.25·(1 − d)`; shadows scale with `s`. Frogs
 join the pad painter's sort keyed by ground y. Away/toward poses are procedural
 pixel matrices now; an optional `frog-<name>-depth-sheet.webp` supersedes them.
+
+*As implemented:* the arc height uses the continuous perspective at the ground
+point (only the sprite scale is quantised, so the arc has no 1/16 steps). The
+visiting perch is `0.78·rx + 4 px` toward the visitor's home side instead of a
+fixed 0.045 of the width. A back-view landing shows `back_idle`; a front-view
+landing uses the side `landing` cell. Chomps during a back-view flight reuse
+`away_fall` (no away chomp cell exists).
 
 ## Risks / Trade-offs
 

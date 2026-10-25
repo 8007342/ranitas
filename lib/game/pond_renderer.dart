@@ -9,8 +9,8 @@ import 'scene_layers.dart';
 
 /// Widescreen pixel pond scenery implementing the 6-Tier Composable Rendering
 /// Architecture (`art/INTERACTION_STYLEGUIDE.md`). The caller retains ownership
-/// of [backdrop], [emissive], [frogSheets], [wildlifeSheet], the optional
-/// images on [layers] and the baked [cycles].
+/// of [backdrop], [emissive], [frogSheets], [frogDepthSheets], [wildlifeSheet],
+/// the optional images on [layers] and the baked [cycles].
 class PondRenderer {
   ui.Image? backdrop;
 
@@ -18,6 +18,10 @@ class PondRenderer {
   /// plain grading. See `scripts/make-emissive.mjs`.
   ui.Image? emissive;
   List<ui.Image?> frogSheets = [null, null];
+
+  /// Optional 4×2 back/front-view sheets per frog; `null` falls back to the
+  /// procedural away/toward poses.
+  List<ui.Image?> frogDepthSheets = [null, null];
   ui.Image? wildlifeSheet;
   bool reducedMotion = false;
 
@@ -259,56 +263,61 @@ class PondRenderer {
     _waterSurfaceAndRipples(canvas, model, motion);
     layers.drawSlot(canvas, LayerSlot.midBank, model, motion);
 
-    // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Splash Droplets, Frogs & Bugs
-    final allPads = <(PadState, double, double, double)>[
-      for (final p in model.ambientPads)
+    // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Frogs
+    // (sorted with the pads by ground y so a far frog passes behind a near pad),
+    // Splash Droplets & Bugs
+    double padSortY(PadState p) =>
+        _height * p.y +
+        3 +
+        p.floatY +
+        (p.index == 0
+            ? model.leafNudge * 2
+            : p.index == 1
+            ? -model.leafNudge * 2
+            : 0);
+    final tier4 = <(double, void Function())>[
+      for (final p in [...model.ambientPads, ...model.pads])
         (
-          p,
-          _width * p.x,
-          _height * p.y + 3 + p.floatY,
-          t + p.index * 1.1,
+          padSortY(p),
+          () => _pad(
+            canvas,
+            p,
+            _width * p.x,
+            padSortY(p),
+            p.isAmbient ? t + p.index * 1.1 : t + p.index * 2,
+            motion,
+            model.biome,
+            model.basin.depthAt(p.y * _height),
+          ),
         ),
-      (
-        model.pads[0],
-        _width * model.pads[0].x,
-        _height * model.pads[0].y + 3 + model.leafNudge * 2 + model.pads[0].floatY,
-        t,
-      ),
-      (
-        model.pads[1],
-        _width * model.pads[1].x,
-        _height * model.pads[1].y + 3 - model.leafNudge * 2 + model.pads[1].floatY,
-        t + 2,
-      ),
-    ]..sort((a, b) => a.$3.compareTo(b.$3));
-
-    for (final entry in allPads) {
-      _pad(
-        canvas,
-        entry.$1,
-        entry.$2,
-        entry.$3,
-        entry.$4,
-        motion,
-        model.biome,
-      );
+      for (final frog in model.frogs)
+        (
+          // A perched frog sorts just after its own pad; in flight it follows
+          // the ground point under the arc.
+          (frog.airborne || frog.swimming
+                  ? frog.groundY * _height + 3
+                  : padSortY(model.pads[frog.leafIndex])) +
+              .01,
+          () => FrogSprites.renderFrog(
+            canvas: canvas,
+            paint: _paint,
+            frog: frog,
+            model: model,
+            motion: motion,
+            reducedMotion: reducedMotion,
+            sheet: frog.index < frogSheets.length
+                ? frogSheets[frog.index]
+                : null,
+            depthSheet: frog.index < frogDepthSheets.length
+                ? frogDepthSheets[frog.index]
+                : null,
+          ),
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    for (final entry in tier4) {
+      entry.$2();
     }
     _splashDroplets(canvas, model);
-
-    for (final frog in model.frogs) {
-      final sheet = frog.index < frogSheets.length
-          ? frogSheets[frog.index]
-          : null;
-      FrogSprites.renderFrog(
-        canvas: canvas,
-        paint: _paint,
-        frog: frog,
-        model: model,
-        motion: motion,
-        reducedMotion: reducedMotion,
-        sheet: sheet,
-      );
-    }
     for (final bug in model.bugs) {
       if (bug.alive) _bug(canvas, bug, model);
     }
@@ -416,7 +425,8 @@ class PondRenderer {
       final px = pad.x * _width + pad.driftX * .5;
       final py = pad.y * _height + 5 + pad.floatY + pad.dipY * .5;
       final sway = math.sin(m.time * .6 + pad.index) * 2.5 * motion;
-      final stemLen = pad.isAmbient ? 16.0 : 28.0;
+      final stemLen =
+          (pad.isAmbient ? 16.0 : 28.0) * m.basin.perspectiveAt(pad.y * _height);
       _line(c, px, py, px + sway, py + stemLen, 0xff0d333b, .35, pad.isAmbient ? 1 : 2);
     }
   }
@@ -719,6 +729,7 @@ class PondRenderer {
     double t,
     double motion,
     String biome,
+    double depth,
   ) {
     final bob = math.sin(t * .7) * .8 * motion;
     final px = x + pad.driftX;
@@ -734,17 +745,32 @@ class PondRenderer {
 
     final isGrotto = biome == 'grotto' || biome == 'crystal_grotto';
     final isMaple = biome == 'maple' || biome == 'autumn_mist';
-    final padMid = isGrotto
-        ? 0xff288588
-        : isMaple
-        ? 0xff3b785f
-        : 0xff32776a;
-    final padLight = isGrotto
-        ? 0xff49b0a8
-        : isMaple
-        ? 0xff5ca177
-        : 0xff49947a;
+    // Far pads haze toward the water tone (design D6: `vd × 0.12`).
+    final hazeAmount = (1 - depth) * .12;
+    int hazed(int color) => hazeAmount <= 0
+        ? color
+        : ui.Color.lerp(
+            ui.Color(color),
+            const ui.Color(0xff2f5d66),
+            hazeAmount,
+          )!.toARGB32();
+    final padMid = hazed(
+      isGrotto
+          ? 0xff288588
+          : isMaple
+          ? 0xff3b785f
+          : 0xff32776a,
+    );
+    final padLight = hazed(
+      isGrotto
+          ? 0xff49b0a8
+          : isMaple
+          ? 0xff5ca177
+          : 0xff49947a,
+    );
+    final padRim = hazed(0xff143e3a);
     final veinColor = isGrotto ? 0xff92efe3 : 0xffb7cd86;
+    final yaw = pad.yaw;
 
     // 1. Subsurface pad shadow (expands slightly when pad dips into water)
     _oval(
@@ -776,7 +802,7 @@ class PondRenderer {
     final foldCompressX = fold * 2.8 * scaleRatio;
     final bodyCenterX = px - foldSide * foldCompressX * .5;
     final bodyRx = math.max(3.5, rx - foldCompressX * .5);
-    _oval(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, 0xff143e3a);
+    _oval(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, padRim);
     _oval(c, bodyCenterX, py, bodyRx, ry, padMid);
     if (bodyRx > 6 && ry > 3.2) {
       _oval(
@@ -795,7 +821,8 @@ class PondRenderer {
       _oval(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58, cupAlpha);
     }
 
-    // 5. Radial leaf veins & V-notch
+    // 5. Radial leaf veins & V-notch. Veins and the notch rotate with the
+    //    pad's slow yaw (scanline ovals cannot), fanned around the ellipse.
     if (scaleRatio > 0.55) {
       _line(
         c,
@@ -807,23 +834,25 @@ class PondRenderer {
         .8,
       );
       for (var i = -3; i <= 3; i++) {
+        final phi = -math.pi / 2 + i * .27 + yaw;
         _line(
           c,
           bodyCenterX,
           py + 1,
-          bodyCenterX + i * bodyRx * .26,
-          py - ry + 3 * scaleRatio + i * tilt * 2.5,
+          bodyCenterX + math.cos(phi) * (bodyRx - 2 * scaleRatio),
+          py + 1 + math.sin(phi) * (ry - 1) + i * tilt * 2.5,
           veinColor,
           .28,
         );
       }
     }
+    final notch = .35 + yaw;
     _line(
       c,
       bodyCenterX,
       py + 1,
-      bodyCenterX + bodyRx - 1,
-      py + ry - 1.5 * scaleRatio,
+      bodyCenterX + math.cos(notch) * (bodyRx - 1),
+      py + 1 + math.sin(notch) * (ry - 1),
       0xff153f42,
       1,
       scaleRatio > 0.65 ? 2 : 1,
@@ -833,8 +862,8 @@ class PondRenderer {
         c,
         bodyCenterX + 1,
         py + 2,
-        bodyCenterX + bodyRx - 2,
-        py + ry - 1,
+        bodyCenterX + 1 + math.cos(notch) * (bodyRx - 3),
+        py + 2 + math.sin(notch) * (ry - 2),
         0xff67a47b,
       );
       _rect(
@@ -895,8 +924,11 @@ class PondRenderer {
     // 8. Companion floating water lotus bloom beside pad 0 or lotus-bearing ambient pads
     if (pad.index == 0 || pad.hasLotus) {
       final bScale = pad.isAmbient ? (scaleRatio * 1.15).clamp(0.55, 0.95) : 1.0;
-      final lx = px - rx - 8 * bScale + math.sin(t * .5) * 1.2 * motion;
-      final ly = py + 4 * bScale + pad.dipY * .35;
+      final orbit = math.pi + yaw * .5;
+      final lx =
+          px + math.cos(orbit) * (rx + 8 * bScale) + math.sin(t * .5) * 1.2 * motion;
+      final ly =
+          py + 4 * bScale + math.sin(orbit) * (ry + 2 * bScale) + pad.dipY * .35;
       _oval(c, lx, ly + 2 * bScale, 8 * bScale, 3 * bScale, 0xff1f5750, .85);
       _oval(c, lx - 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
       _oval(c, lx + 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);

@@ -39,29 +39,17 @@ class PondModel {
     // Biome-specific open-water basin so hero pads, ambient floating leaves,
     // Koi fish, and rain impacts always rest on water and never on shore rocks.
     basin = WaterBasin.forBiome(biome);
-    frogs = [
-      FrogState(0, basin.pad0X, basin.pad0Y),
-      FrogState(1, basin.pad1X, basin.pad1Y),
-    ];
-    pads = [
-      PadState(
-        index: 0,
-        x: basin.pad0X,
-        y: basin.pad0Y,
-        radiusX: 35,
-        radiusY: 11,
-      ),
-      PadState(
-        index: 1,
-        x: basin.pad1X,
-        y: basin.pad1Y,
-        radiusX: 37,
-        radiusY: 12,
-      ),
-    ];
 
+    // Pad layout and all cosmetic randomness come from the fx stream so the
+    // main stream keeps its biome/weather/cycle draw order across versions.
     _fxRandom = Random(sceneSeed ^ 0x5f3759df);
+    _noiseSeed = (sceneSeed ^ 0x3c6ef372) & 0x7fffffff;
+    pads = _placeHeroPads();
     ambientPads = _generateAmbientPads();
+    frogs = [
+      FrogState(0, pads[0].x, pads[0].y),
+      FrogState(1, pads[1].x, pads[1].y),
+    ];
     koi = List.generate(4, (i) {
       final y =
           basin.topY +
@@ -205,57 +193,368 @@ class PondModel {
   final List<SplashDroplet> splashDroplets = [];
   final List<RaindropState> raindrops = [];
   late final Random _fxRandom;
+  late final int _noiseSeed;
   final List<BugState> bugs = [];
 
+  /// Lily pad dynamics constants (design D6). The landing share and linear
+  /// drag are tuned above the first draft so a sideways hop reads as a 3–12 px
+  /// slide that settles within 3 s; the rest are as designed.
+  static const double _padImpulseShare = .2;
+  static const double _padLinearDrag = 1.6;
+  static const double _padQuadraticDrag = .06;
+  static const double _sectionWallK = 2.5;
+  static const double _sectionWallC = 1.5;
+  static const double _sectionWallMargin = 3.0;
+  static const double _padSeparationK = 6.0;
+  static const double _currentScale = 90;
+  static const double _currentTimeScale = 25;
+  static const double _landingHoming = 6.0;
+
+  /// Shared perspective law for pads, frogs and stems: `0.56` at the far shore
+  /// and `1.04` at the near rim of the water basin.
+  double perspectiveAt(double yPx) => basin.perspectiveAt(yPx);
+
+  /// Sprite scale for a frog: perspective at its ground point (not its airborne
+  /// y), quantised to 1/16 so soft painted cells do not shimmer (design D7).
+  double frogScale(FrogState frog) =>
+      (basin.perspectiveAt(frog.groundY * 359) * 16).roundToDouble() / 16;
+
+  /// Recomputes a pad's on-screen radii from its current depth. `radiusY` is
+  /// quantised to half pixels so scanline ovals do not flicker while drifting.
+  void projectPad(PadState pad) {
+    final yPx = pad.y * 359;
+    final d = basin.depthAt(yPx);
+    pad.radiusX = pad.baseRx * basin.perspectiveAt(yPx);
+    pad.radiusY = (pad.radiusX * (.28 + .07 * d) * 2).roundToDouble() / 2;
+  }
+
+  /// Positive when the boxes swept by two pads inside their sections cannot
+  /// meet on at least one axis (with a small growth margin for depth changes).
+  static double _sweptGap(PadState a, PadState b) {
+    final dx = (a.x - b.x).abs() * 641;
+    final dy = (a.y - b.y).abs() * 359;
+    final gapX =
+        dx - (a.radiusX + a.sectionRadius) - (b.radiusX + b.sectionRadius) - 2;
+    final gapY =
+        dy - (a.radiusY + a.sectionRadius) - (b.radiusY + b.sectionRadius) - 2;
+    return max(gapX, gapY);
+  }
+
+  /// Free room between two pads' bodies (no sections), on the freer axis.
+  static double _bodyGap(PadState a, PadState b) {
+    final dx = (a.x - b.x).abs() * 641;
+    final dy = (a.y - b.y).abs() * 359;
+    return max(dx - a.radiusX - b.radiusX - 2, dy - a.radiusY - b.radiusY - 2);
+  }
+
+  /// Basin-limited room for a pad to drift in any direction from its home.
+  double _basinRoom(PadState pad) {
+    final px = pad.x * 641;
+    final py = pad.y * 359;
+    var room = min(
+      min(px - pad.radiusX - basin.leftX(py), basin.rightX(py) - pad.radiusX - px),
+      min(py - pad.radiusY - basin.topY, basin.bottomY - pad.radiusY - py),
+    ) - 4;
+    // The basin narrows toward the far shore, so re-check the walls at the
+    // highest point the pad could reach.
+    final probeY = max(basin.topY, py - max(0.0, room));
+    room = min(
+      room,
+      min(px - pad.radiusX - basin.leftX(probeY),
+              basin.rightX(probeY) - pad.radiusX - px) -
+          4,
+    );
+    return max(1.0, room);
+  }
+
+  PadState _heroCandidate(int index, double baseRx, double section, double py,
+      double frac) {
+    final s = basin.perspectiveAt(py);
+    final rx = baseRx * s;
+    // Narrowest walls the section can reach lie toward the far shore.
+    final left = max(basin.leftX(py - section), basin.leftX(py + section));
+    final right = min(basin.rightX(py - section), basin.rightX(py + section));
+    var px = left + frac * (right - left);
+    final lo = left + rx + section + 4;
+    final hi = right - rx - section - 4;
+    px = lo <= hi ? px.clamp(lo, hi) : (left + right) / 2;
+    final pad = PadState(
+      index: index,
+      x: px / 641,
+      y: py / 359,
+      baseRx: baseRx,
+      sectionRadius: section,
+    );
+    projectPad(pad);
+    return pad;
+  }
+
+  /// Hero pad 0 sits in the left 22–42 % of the basin width and hero 1 in the
+  /// right 58–78 %, each at any depth whose section still fits the basin.
+  List<PadState> _placeHeroPads() {
+    for (var attempt = 0; attempt < 40; attempt++) {
+      final candidates = <PadState>[];
+      for (var i = 0; i < 2; i++) {
+        final baseRx = 30 + _fxRandom.nextDouble() * 10;
+        final section = 10 + _fxRandom.nextDouble() * 4;
+        final ryMax = baseRx * 1.04 * .35;
+        final minY = basin.topY + ryMax + section + 4;
+        final maxY = basin.bottomY - ryMax - section - 4;
+        final py = minY + _fxRandom.nextDouble() * max(1.0, maxY - minY);
+        final frac = (i == 0 ? .22 : .58) + _fxRandom.nextDouble() * .20;
+        candidates.add(_heroCandidate(i, baseRx, section, py, frac));
+      }
+      if (_sweptGap(candidates[0], candidates[1]) >= 0) return candidates;
+    }
+    // Deterministic fallback for the narrowest basins: a classic near-rim pair.
+    final py = basin.topY + .72 * (basin.bottomY - basin.topY);
+    return [
+      _heroCandidate(0, 32, 10, py, .27),
+      _heroCandidate(1, 34, 10, py, .73),
+    ];
+  }
+
+  /// Five to nine ambient leaves placed clear of the hero sections. Each one's
+  /// drift section is then shrunk to the free room around it, so sections never
+  /// overlap and pads inside their sections can never touch.
   List<PadState> _generateAmbientPads() {
     final result = <PadState>[];
-    final hero0X = basin.pad0X * 641;
-    final hero0Y = basin.pad0Y * 359;
-    final hero1X = basin.pad1X * 641;
-    final hero1Y = basin.pad1Y * 359;
+    final count = 5 + _fxRandom.nextInt(5);
+    final nominal = <PadState, double>{};
 
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < count; i++) {
       var placed = false;
-      for (var attempt = 0; attempt < 24 && !placed; attempt++) {
-        final yn = .12 + _fxRandom.nextDouble() * .80;
+      for (var attempt = 0; attempt < 240 && !placed; attempt++) {
+        // Ask for generous drift room first, then relax when the basin is
+        // tight, and finally fall back to small leaves for the last slots.
+        final allowance = max(0.0, 10.0 - attempt * .1);
+        final yn = .06 + _fxRandom.nextDouble() * .88;
         final py = basin.topY + yn * (basin.bottomY - basin.topY);
-        final left = basin.leftX(py) + 22;
-        final right = basin.rightX(py) - 22;
+        final baseRx =
+            9.5 + _fxRandom.nextDouble() * (attempt < 100 ? 11.5 : 3.5);
+        final rx = baseRx * basin.perspectiveAt(py);
+        final left = basin.leftX(py) + rx + allowance + 4;
+        final right = basin.rightX(py) - rx - allowance - 4;
         if (right <= left) continue;
         final px = left + _fxRandom.nextDouble() * (right - left);
-
-        // Keep ambient leaves clear of the two primary frog lily pads
-        final d0 = sqrt(pow(px - hero0X, 2) + pow((py - hero0Y) * 1.8, 2));
-        final d1 = sqrt(pow(px - hero1X, 2) + pow((py - hero1Y) * 1.8, 2));
-        if (d0 < 52 || d1 < 52) continue;
-
-        final tooClose = result.any((other) {
-          final ox = other.x * 641;
-          final oy = other.y * 359;
-          return sqrt(pow(px - ox, 2) + pow((py - oy) * 1.8, 2)) < 28;
-        });
-        if (tooClose) continue;
-
-        final perspective = .56 + .48 * yn;
-        final rx = (9.5 + _fxRandom.nextDouble() * 11.5) * perspective;
-        final ry = rx * (.28 + .07 * yn);
-        result.add(
-          PadState(
-            index: 2 + i,
-            x: px / 641,
-            y: py / 359,
-            radiusX: rx,
-            radiusY: ry,
-            isAmbient: true,
-            hasLotus: i % 3 == 0,
-            phase: _fxRandom.nextDouble() * pi * 2,
-          ),
+        final candidate = PadState(
+          index: 2 + i,
+          x: px / 641,
+          y: py / 359,
+          baseRx: baseRx,
+          sectionRadius: allowance,
+          isAmbient: true,
+          hasLotus: i % 3 == 0,
+          phase: _fxRandom.nextDouble() * pi * 2,
         );
+        projectPad(candidate);
+        if (py - candidate.radiusY < basin.topY + 2 ||
+            py + candidate.radiusY > basin.bottomY - 2) {
+          continue;
+        }
+        if (pads.any((hero) => _sweptGap(candidate, hero) < 0)) continue;
+        if (result.any((other) => _sweptGap(candidate, other) < 0)) continue;
+        nominal[candidate] = 22 + _fxRandom.nextDouble() * 8;
+        result.add(candidate);
         placed = true;
       }
     }
+
+    for (final pad in result) {
+      var section = min(nominal[pad]!, _basinRoom(pad));
+      for (final hero in pads) {
+        section = min(section, _bodyGap(pad, hero) - hero.sectionRadius);
+      }
+      for (final other in result) {
+        if (other != pad) section = min(section, _bodyGap(pad, other) / 2);
+      }
+      pad.sectionRadius = max(1.0, section);
+    }
     result.sort((a, b) => a.y.compareTo(b.y));
     return result;
+  }
+
+  // -- Slow pad motion -------------------------------------------------------
+
+  /// Smooth seeded lattice value in [0, 1]; a pure function of its arguments
+  /// (no Random), so partitions of the update timeline agree exactly. Lattice
+  /// indices are offset to stay non-negative, and every intermediate product
+  /// stays below 2^53 for the web target.
+  double _lattice(int ix, int iy, int it) {
+    var h = ((ix + 64) * 73856093) ^
+        ((iy + 64) * 19349663) ^
+        ((it + 64) * 83492791) ^
+        _noiseSeed;
+    h &= 0x7fffffff;
+    h = ((h ^ (h >> 15)) * 0x2c1b3) & 0x7fffffff;
+    h = (h ^ (h >> 12)) & 0x7fffffff;
+    return (h & 0xffff) / 65535.0;
+  }
+
+  static double _fade(double t) => t * t * t * (t * (t * 6 - 15) + 10);
+
+  double _valueNoise(double x, double y, double z) {
+    final x0 = x.floor(), y0 = y.floor(), z0 = z.floor();
+    final fx = _fade(x - x0), fy = _fade(y - y0), fz = _fade(z - z0);
+    double lerp(double a, double b, double t) => a + (b - a) * t;
+    final c00 = lerp(_lattice(x0, y0, z0), _lattice(x0 + 1, y0, z0), fx);
+    final c10 = lerp(_lattice(x0, y0 + 1, z0), _lattice(x0 + 1, y0 + 1, z0), fx);
+    final c01 = lerp(_lattice(x0, y0, z0 + 1), _lattice(x0 + 1, y0, z0 + 1), fx);
+    final c11 = lerp(
+      _lattice(x0, y0 + 1, z0 + 1),
+      _lattice(x0 + 1, y0 + 1, z0 + 1),
+      fx,
+    );
+    return lerp(lerp(c00, c10, fy), lerp(c01, c11, fy), fz);
+  }
+
+  /// Water current at a pad in px/s: the curl of seeded value noise (90 px,
+  /// 25 s), 0.8–2.0 px/s (hero pads × 0.6), plus the wind.
+  (double, double) currentAt(PadState pad) {
+    final px = pad.x * 641 / _currentScale;
+    final py = pad.y * 359 / _currentScale;
+    final pt = time / _currentTimeScale;
+    const eps = 2 / _currentScale;
+    final gx =
+        (_valueNoise(px + eps, py, pt) - _valueNoise(px - eps, py, pt)) /
+            (2 * eps);
+    final gy =
+        (_valueNoise(px, py + eps, pt) - _valueNoise(px, py - eps, pt)) /
+            (2 * eps);
+    // Curl of the scalar potential: perpendicular to its gradient.
+    var cx = gy;
+    var cy = -gx;
+    final mag = sqrt(cx * cx + cy * cy);
+    if (mag < 1e-9) {
+      cx = 1;
+      cy = 0;
+    } else {
+      cx /= mag;
+      cy /= mag;
+    }
+    final speed =
+        (.8 + 1.2 * (mag / 1.1).clamp(0.0, 1.0)) * (pad.isAmbient ? 1.0 : .6);
+    return (cx * speed + wind * 3, cy * speed);
+  }
+
+  /// Transfers a share of a frog's screen-plane momentum to a pad: 70 % to the
+  /// slow slide, 30 % to the fast drift/float springs.
+  void _padImpulse(PadState pad, double vxPx, double vyPx, double share) {
+    final mass = 1.6 + .02 * pad.radiusX;
+    final jx = share * _padImpulseShare * vxPx / mass;
+    final jy = share * _padImpulseShare * vyPx / mass;
+    pad.vx += .7 * jx;
+    pad.vy += .7 * jy;
+    pad.driftVelocity += .3 * jx;
+    pad.floatVelocity += .3 * jy;
+  }
+
+  void _slidePad(PadState pad, double dt, List<PadState> allPads) {
+    // `vx, vy` is the slide relative to the water, which itself moves with the
+    // current, so a settled pad drifts with the current at zero slide speed.
+    final (cx, cy) = currentAt(pad);
+    final speed = sqrt(pad.vx * pad.vx + pad.vy * pad.vy);
+    final damp = 1 / (1 + dt * (_padLinearDrag + _padQuadraticDrag * speed));
+    pad.vx *= damp;
+    pad.vy *= damp;
+
+    // Soft section wall: a 3 px over-damped band just inside the section
+    // radius, so ordinary slides finish on free water and only the current can
+    // lean a pad against its wall.
+    var px = pad.x * 641;
+    var py = pad.y * 359;
+    final hx = pad.homeX * 641;
+    final hy = pad.homeY * 359;
+    var dx = px - hx;
+    var dy = py - hy;
+    var dist = sqrt(dx * dx + dy * dy);
+    final inner = max(
+      pad.sectionRadius * .6,
+      pad.sectionRadius - _sectionWallMargin,
+    );
+    if (dist > inner && dist > 1e-9) {
+      final nx = dx / dist;
+      final ny = dy / dist;
+      final outward = max(0.0, (pad.vx + cx) * nx + (pad.vy + cy) * ny);
+      final a = -_sectionWallK * (dist - inner) - _sectionWallC * outward;
+      pad.vx += a * nx * dt;
+      pad.vy += a * ny * dt;
+    }
+
+    // Mass-weighted separation penalty when two bodies would touch.
+    final mass = 1.6 + .02 * pad.radiusX;
+    for (final other in allPads) {
+      if (identical(other, pad)) continue;
+      final ox = (px - other.x * 641);
+      final oy = (py - other.y * 359);
+      final sumX = pad.radiusX + other.radiusX + 2;
+      final sumY = pad.radiusY + other.radiusY + 2;
+      if (ox.abs() >= sumX || oy.abs() >= sumY) continue;
+      final pen = min(sumX - ox.abs(), sumY - oy.abs());
+      final len = max(1e-6, sqrt(ox * ox + oy * oy));
+      final otherMass = 1.6 + .02 * other.radiusX;
+      final weight = otherMass / (mass + otherMass);
+      pad.vx += _padSeparationK * pen * weight * (ox / len) * dt;
+      pad.vy += _padSeparationK * pen * weight * (oy / len) * dt;
+    }
+
+    px += (pad.vx + cx) * dt;
+    py += (pad.vy + cy) * dt;
+
+    // Basin clamp keeps every pad on open water.
+    final minY = basin.topY + pad.radiusY + 2;
+    final maxY = basin.bottomY - pad.radiusY - 2;
+    if (py < minY) {
+      py = minY;
+      pad.vy = max(-cy, pad.vy);
+    } else if (py > maxY) {
+      py = maxY;
+      pad.vy = min(-cy, pad.vy);
+    }
+    final minX = basin.leftX(py) + pad.radiusX + 4;
+    final maxX = basin.rightX(py) - pad.radiusX - 4;
+    if (px < minX) {
+      px = minX;
+      pad.vx = max(-cx, pad.vx);
+    } else if (px > maxX) {
+      px = maxX;
+      pad.vx = min(-cx, pad.vx);
+    }
+
+    // Hard section clamp as a last resort. It runs after the basin clamp: the
+    // home is basin-valid by construction, so pulling toward it stays valid.
+    dx = px - hx;
+    dy = py - hy;
+    dist = sqrt(dx * dx + dy * dy);
+    if (dist > pad.sectionRadius) {
+      final nx = dx / dist;
+      final ny = dy / dist;
+      px = hx + nx * pad.sectionRadius;
+      py = hy + ny * pad.sectionRadius;
+      final outward = (pad.vx + cx) * nx + (pad.vy + cy) * ny;
+      if (outward > 0) {
+        pad.vx -= outward * nx;
+        pad.vy -= outward * ny;
+      }
+    }
+
+    pad.x = px / 641;
+    pad.y = py / 359;
+    projectPad(pad);
+
+    // Visual yaw drifts after off-centre impacts and slowly settles.
+    pad.yaw += pad.yawVelocity * dt;
+    pad.yawVelocity *= exp(-dt * .8);
+  }
+
+  /// Perched and sleeping frogs ride their pads; the perch is pad-relative.
+  void _rideFrogs() {
+    for (final frog in frogs) {
+      if (frog.airborne || frog.swimming) continue;
+      final pad = pads[frog.leafIndex];
+      frog.x = pad.x + frog.perchDx;
+      frog.y = pad.y + frog.perchDy;
+    }
   }
 
   /// Normal sessions adapt within 180–360 seconds; overrides are for previews
@@ -428,18 +727,21 @@ class PondModel {
       : action == 'low'
       ? .25
       : .39;
-  double _leafX(int leaf) => pads[leaf].x;
   double _leafY(int leaf) => pads[leaf].y;
 
-  // Each frog has a small perch offset when visiting the other's leaf. Flights
-  // are serialized; the vertical lane additionally separates passing silhouettes.
+  /// Pad-relative perch offset (normalised x). A frog visiting the other's
+  /// leaf sits toward its own home side, just inside the rim, so both
+  /// silhouettes stay apart even on the smallest far pad.
+  double perchOffsetX(int frogIndex, int leaf) {
+    if (leaf == frogIndex) return 0;
+    final side = frogIndex == 0 ? -1.0 : 1.0;
+    return side * (pads[leaf].radiusX * .78 + 4) / 641;
+  }
+
+  // Flights are serialized; the vertical lane additionally separates passing
+  // silhouettes.
   double _perchX(FrogState frog, int leaf) =>
-      _leafX(leaf) +
-      (leaf == frog.index
-          ? 0
-          : frog.index == 0
-          ? -.045
-          : .045);
+      pads[leaf].x + perchOffsetX(frog.index, leaf);
 
   void _launch(FrogState frog, String action, {bool returning = false}) {
     final sourcePad = pads[frog.leafIndex];
@@ -447,8 +749,7 @@ class PondModel {
     frog._fromX = frog.x;
     frog._fromY = frog.y;
     frog._targetLeaf = returning ? frog.index : 1 - frog.leafIndex;
-    frog._toX = _perchX(frog, frog._targetLeaf);
-    frog._toY = _leafY(frog._targetLeaf);
+    final targetPad = pads[frog._targetLeaf];
     // Choose the landing point before flight, including homeward flights.
     // Nearly vertical variation keeps both perches separated on the same pad.
     final radius = .005 + random.nextDouble() * .01;
@@ -457,8 +758,11 @@ class PondModel {
     final ySign = frogs[1 - frog.index].leafIndex == frog._targetLeaf
         ? (frog.index == 0 ? -1 : 1)
         : sign;
-    frog._toX += cos(angle) * radius * sign;
-    frog._toY += sin(angle) * radius * ySign;
+    frog._perchTargetDx =
+        perchOffsetX(frog.index, frog._targetLeaf) + cos(angle) * radius * sign;
+    frog._perchTargetDy = sin(angle) * radius * ySign;
+    frog._toX = targetPad.x + frog._perchTargetDx;
+    frog._toY = targetPad.y + frog._perchTargetDy;
     frog._duration = _flightDuration(action);
     frog._returning = returning;
     frog.jumpPhase = 0;
@@ -467,6 +771,10 @@ class PondModel {
     frog.swallowTimer = 0;
     frog.caughtInFlight = 0;
     frog.facing = frog._toX >= frog._fromX ? 1.0 : -1.0;
+    frog.view = FrogState.viewFor(
+      (frog._toX - frog._fromX) * 641,
+      (frog._toY - frog._fromY) * 359,
+    );
     frog.energy = max(.2, frog.energy - .08);
 
     // Takeoff recoil on source lily pad + takeoff ripple
@@ -480,6 +788,12 @@ class PondModel {
     sourcePad.driftVelocity -= frog.facing * 2.2 * launchImpulse;
     sourcePad.dewdropVelocity += 14.0 * launchImpulse;
     sourcePad.landingZone = 'takeoff';
+    _padImpulse(
+      sourcePad,
+      (frog._toX - frog._fromX) * 641 / frog._duration,
+      (frog._toY - frog._fromY) * 359 / frog._duration,
+      -.8,
+    );
     _emitRipple(
       x: sourcePad.x * 641 + sourcePad.driftX,
       y: sourcePad.y * 359 + 2,
@@ -499,6 +813,14 @@ class PondModel {
     frog.cooldown = max(0, frog.cooldown - dt);
     frog.energy = min(1, frog.energy + dt * .035);
     frog.bellyFlop = max(0, frog.bellyFlop - dt * 2);
+    if (frog.airborne || frog.swimming) {
+      // The landing point homes toward the moving target pad, which keeps the
+      // parabola continuous instead of snapping at touchdown.
+      final target = pads[frog._targetLeaf];
+      final k = 1 - exp(-_landingHoming * dt);
+      frog._toX += (target.x + frog._perchTargetDx - frog._toX) * k;
+      frog._toY += (target.y + frog._perchTargetDy - frog._toY) * k;
+    }
     if (frog.swimming) {
       frog._swimAge += dt;
       final p = (frog._swimAge / 1.6).clamp(0.0, 1.0);
@@ -508,19 +830,23 @@ class PondModel {
       frog.facing = frog._toX >= frog._splashX ? 1.0 : -1.0;
       if (p >= 1) {
         frog.swimming = false;
-        _land(frog);
+        _land(frog, (frog._toX - frog._splashX) * 641 / 1.6, 0);
       }
       return;
     }
     if (!frog.airborne) return;
-    // Pure, single-impulse ballistic parabola from liftoff (p=0) to landing (p=1)
+    // Pure, single-impulse ballistic parabola from liftoff (p=0) to landing
+    // (p=1). The arc height follows the perspective of the ground point so a
+    // far jump reads smaller without changing its duration.
     frog.jumpPhase = min(1, frog.jumpPhase + dt / frog._duration);
     final p = frog.jumpPhase;
     frog.x = frog._fromX + (frog._toX - frog._fromX) * p;
+    final groundY = frog._fromY + (frog._toY - frog._fromY) * p;
     frog.y =
-        frog._fromY +
-        (frog._toY - frog._fromY) * p -
-        sin(pi * p) * (_height(frog.action) + frog.index * .018);
+        groundY -
+        sin(pi * p) *
+            (_height(frog.action) + frog.index * .018) *
+            basin.perspectiveAt(groundY * 359);
     if (!_settling && p > .12 && p < .88) {
       for (final bug in bugs) {
         if (!bug.alive || bug.opacity < .25) continue;
@@ -580,15 +906,24 @@ class PondModel {
         _emitSplashDroplets(sx, sy, count: 10, side: 0, power: 1.25);
         _startleWildlife(sx, sy, 1.35);
       } else {
-        _land(frog);
+        _land(
+          frog,
+          (frog._toX - frog._fromX) * 641 / frog._duration,
+          (frog._toY - frog._fromY) * 359 / frog._duration,
+        );
       }
     }
   }
 
-  void _land(FrogState frog) {
+  /// Settles the frog onto its pad-relative perch. [vxPx]/[vyPx] is the
+  /// screen-plane approach velocity whose momentum shoves the pad.
+  void _land(FrogState frog, double vxPx, double vyPx) {
     frog.leafIndex = frog._targetLeaf;
-    frog.x = frog._toX;
-    frog.y = frog._toY;
+    final pad = pads[frog.leafIndex];
+    frog.perchDx = frog._perchTargetDx;
+    frog.perchDy = frog._perchTargetDy;
+    frog.x = pad.x + frog.perchDx;
+    frog.y = pad.y + frog.perchDy;
     frog.jumpPhase = 0;
     frog.facing = frog.leafIndex == 0 ? 1.0 : -1.0;
     frog.landingTimer = .28;
@@ -600,7 +935,6 @@ class PondModel {
     frog.cooldown = 1.1 + random.nextDouble() * 1.3;
 
     // Pad landing physics: center cup-dip, mid-pad tilt, or edge fold + splash
-    final pad = pads[frog.leafIndex];
     final impactWeight = frog.action == 'high'
         ? 1.35
         : frog.action == 'low'
@@ -613,6 +947,14 @@ class PondModel {
     final signX = offsetX >= 0 ? 1.0 : -1.0;
     final padPxX = pad.x * 641 + pad.driftX;
     final padPxY = pad.y * 359 + 2;
+
+    // Momentum slide plus a yaw kick from the off-centre impact.
+    _padImpulse(pad, vxPx, vyPx, 1);
+    final mass = 1.6 + .02 * pad.radiusX;
+    pad.yawVelocity +=
+        (offsetX * pad.radiusX * vyPx - offsetY * pad.radiusY * vxPx) *
+        _padImpulseShare /
+        (mass * max(1.0, pad.radiusX) * 8);
 
     if (offsetMag >= .58) {
       // Zone C: Edge / Rim Landing -> Leaf Edge Fold + Directional Splash + Ripples
@@ -726,10 +1068,12 @@ class PondModel {
         for (var i = 1; i <= 10; i++) {
           final p = i / 12;
           final x = frog.x + (_perchX(frog, target) - frog.x) * p;
+          final groundY = frog.y + (_leafY(target) - frog.y) * p;
           final y =
-              frog.y +
-              (_leafY(target) - frog.y) * p -
-              sin(pi * p) * (_height(action) + .018) -
+              groundY -
+              sin(pi * p) *
+                  (_height(action) + .018) *
+                  basin.perspectiveAt(groundY * 359) -
               .025;
           closest = min(
             closest,
@@ -1037,6 +1381,21 @@ class PondModel {
       if (pad.edgeFold < .01) pad.edgeFold = 0;
       pad.waterWashAlpha = (pad.edgeFold * .72).clamp(0.0, 1.0);
     }
+
+    // 5. Slow slide, current and section walls on top of the fast springs.
+    //    Frozen while the frogs sleep so the final scene holds still.
+    if (!sleeping) {
+      for (final pad in allPads) {
+        _slidePad(pad, dt, allPads);
+      }
+    } else {
+      for (final pad in allPads) {
+        pad.vx = 0;
+        pad.vy = 0;
+        pad.yawVelocity = 0;
+      }
+    }
+    _rideFrogs();
   }
 
   void _updateRipplesAndSplashes(double dt) {
@@ -1263,8 +1622,8 @@ class PondModel {
   }
 }
 
-/// Per-biome trapezoidal open-water basin in logical `641 × 359` coordinates
-/// and grounded hero lily pad coordinates (`pad0X, pad0Y`, `pad1X, pad1Y`).
+/// Per-biome trapezoidal open-water basin in logical `641 × 359` coordinates.
+/// Hero pads are placed inside it from the scene seed.
 class WaterBasin {
   const WaterBasin({
     required this.topY,
@@ -1273,10 +1632,6 @@ class WaterBasin {
     required this.topRightX,
     required this.bottomLeftX,
     required this.bottomRightX,
-    required this.pad0X,
-    required this.pad0Y,
-    required this.pad1X,
-    required this.pad1Y,
   });
 
   final double topY;
@@ -1285,10 +1640,13 @@ class WaterBasin {
   final double topRightX;
   final double bottomLeftX;
   final double bottomRightX;
-  final double pad0X;
-  final double pad0Y;
-  final double pad1X;
-  final double pad1Y;
+
+  /// Normalised depth in the basin: 0 at the far shore, 1 at the near rim.
+  double depthAt(double yPx) =>
+      ((yPx - topY) / max(1.0, bottomY - topY)).clamp(0.0, 1.0);
+
+  /// Perspective scale shared by pads, frogs and stems (design D6).
+  double perspectiveAt(double yPx) => .56 + .48 * depthAt(yPx);
 
   double leftX(double y) {
     final t = ((y - topY) / max(1.0, bottomY - topY)).clamp(0.0, 1.0);
@@ -1313,10 +1671,6 @@ class WaterBasin {
       topRightX: 396,
       bottomLeftX: 188,
       bottomRightX: 452,
-      pad0X: .36,
-      pad0Y: .77,
-      pad1X: .63,
-      pad1Y: .78,
     ),
     'sanctuary' || 'jade_sanctuary' => const WaterBasin(
       topY: 244,
@@ -1325,10 +1679,6 @@ class WaterBasin {
       topRightX: 434,
       bottomLeftX: 192,
       bottomRightX: 456,
-      pad0X: .36,
-      pad0Y: .76,
-      pad1X: .65,
-      pad1Y: .76,
     ),
     'alpine' => const WaterBasin(
       topY: 238,
@@ -1337,10 +1687,6 @@ class WaterBasin {
       topRightX: 428,
       bottomLeftX: 176,
       bottomRightX: 462,
-      pad0X: .34,
-      pad0Y: .75,
-      pad1X: .65,
-      pad1Y: .76,
     ),
     'maple' || 'autumn_mist' => const WaterBasin(
       topY: 228,
@@ -1349,10 +1695,6 @@ class WaterBasin {
       topRightX: 436,
       bottomLeftX: 184,
       bottomRightX: 454,
-      pad0X: .33,
-      pad0Y: .73,
-      pad1X: .66,
-      pad1Y: .75,
     ),
     'cypress' => const WaterBasin(
       topY: 242,
@@ -1361,10 +1703,6 @@ class WaterBasin {
       topRightX: 420,
       bottomLeftX: 182,
       bottomRightX: 450,
-      pad0X: .33,
-      pad0Y: .75,
-      pad1X: .65,
-      pad1Y: .76,
     ),
     'blossom' || 'lotus' => const WaterBasin(
       topY: 236,
@@ -1373,10 +1711,6 @@ class WaterBasin {
       topRightX: 440,
       bottomLeftX: 174,
       bottomRightX: 466,
-      pad0X: .32,
-      pad0Y: .74,
-      pad1X: .66,
-      pad1Y: .75,
     ),
     _ => const WaterBasin(
       topY: 228,
@@ -1385,10 +1719,6 @@ class WaterBasin {
       topRightX: 432,
       bottomLeftX: 186,
       bottomRightX: 452,
-      pad0X: .34,
-      pad0Y: .73,
-      pad1X: .65,
-      pad1Y: .75,
     ),
   };
 }
@@ -1422,7 +1752,16 @@ class FrogState {
   String action = 'tap';
   double cooldown = 1;
   double bellyFlop = 0;
+
+  /// Pad-relative perch (normalised offsets from the pad centre). The frog
+  /// rides its pad through these while perched or sleeping.
+  double perchDx = 0, perchDy = 0;
+
+  /// Camera-relative view of the current or last flight: `side`, `away`
+  /// (back view, moving up-screen) or `toward` (front view, moving down-screen).
+  String view = 'side';
   double _fromX = 0, _fromY = 0, _toX = 0, _toY = 0;
+  double _perchTargetDx = 0, _perchTargetDy = 0;
   double _duration = 1, _swimAge = 0, _splashX = 0;
   int _targetLeaf;
   bool _returning = false;
@@ -1441,6 +1780,14 @@ class FrogState {
   /// Vertical height above the pond/pad surface (`0.0` when perched or swimming).
   double get altitude => airborne ? max(0.0, groundY - y) : 0.0;
 
+  /// View bucket for a screen-plane flight vector in pixels (design D7). Depth
+  /// is weighted 2.5× so modest up/down-screen hops already turn the frog.
+  static String viewFor(double dxPx, double dyPx) {
+    final theta = atan2(dyPx * 2.5, dxPx).abs() * 180 / pi;
+    if (theta < 35 || theta > 145) return 'side';
+    return dyPx < 0 ? 'away' : 'toward';
+  }
+
   /// Current animation state name across the 10-state frog animation system.
   String currentPose({bool charging = false}) {
     if (asleep) return 'sleeping';
@@ -1456,6 +1803,31 @@ class FrogState {
     if (swallowTimer > 0) return 'swallowing';
     return 'idle';
   }
+
+  /// Maps a side pose to its away/toward variant for the flight's [view]. Side
+  /// flights and every perched state except the back-view touchdown return
+  /// [pose] unchanged, so the existing 10 states keep working.
+  String viewPose(String pose) {
+    if (view == 'away') {
+      return switch (pose) {
+        'launching' => 'away_launch',
+        'ascending' => 'away_ascend',
+        'falling' || 'chomping' => 'away_fall',
+        'landing' => 'back_idle',
+        _ => pose,
+      };
+    }
+    if (view == 'toward') {
+      return switch (pose) {
+        'launching' => 'toward_launch',
+        'ascending' => 'toward_ascend',
+        'falling' => 'toward_fall',
+        'chomping' => 'toward_chomp',
+        _ => pose,
+      };
+    }
+    return pose;
+  }
 }
 
 class PadState {
@@ -1463,15 +1835,31 @@ class PadState {
     required this.index,
     required this.x,
     required this.y,
-    required this.radiusX,
-    required this.radiusY,
+    required this.baseRx,
+    required this.sectionRadius,
     this.isAmbient = false,
     this.hasLotus = false,
     this.phase = 0,
-  });
+  }) : homeX = x,
+       homeY = y,
+       radiusX = baseRx,
+       radiusY = baseRx * .3;
   final int index;
-  final double x, y;
-  final double radiusX, radiusY;
+
+  /// Slow state: the pad's centre (normalised), its seeded home and the
+  /// radius of the circular section (px) it may drift inside.
+  double x, y;
+  final double homeX, homeY;
+  double sectionRadius;
+
+  /// Slide velocity in px/s relative to the water (the current is added on
+  /// top) and visual yaw (rotates veins and lotus only).
+  double vx = 0, vy = 0;
+  double yaw = 0, yawVelocity = 0;
+
+  /// Unprojected radius; [radiusX]/[radiusY] follow the perspective each tick.
+  final double baseRx;
+  double radiusX, radiusY;
   final bool isAmbient;
   final bool hasLotus;
   final double phase;

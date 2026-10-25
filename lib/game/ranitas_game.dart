@@ -32,6 +32,10 @@ class RanitasGame extends FlameGame {
       await images.load('frog-meadow-sheet.webp'),
       await images.load('frog-teal-sheet.webp'),
     ];
+    renderer.frogDepthSheets = [
+      await OptionalAssets.load(images, OptionalAssets.frogDepthSheet(0)),
+      await OptionalAssets.load(images, OptionalAssets.frogDepthSheet(1)),
+    ];
     renderer.wildlifeSheet = await images.load('pond-wildlife-sheet.webp');
     // Optional painted layers (art/ASSET_REQUESTS.md); null means procedural.
     final layers = renderer.layers;

@@ -22,6 +22,8 @@ List<Object> snapshot(PondModel p) => [
   for (final f in p.frogs)
     [f.x, f.y, f.airborne, f.swimming, f.asleep, f.leafIndex, f.tongue],
   for (final b in p.bugs) [b.x, b.y, b.vx, b.vy, b.species, b.alive],
+  for (final pad in [...p.pads, ...p.ambientPads])
+    [pad.x, pad.y, pad.vx, pad.vy, pad.radiusX, pad.radiusY, pad.yaw],
 ];
 
 void checkGeometry(PondModel p, String context) {
@@ -41,6 +43,42 @@ void checkGeometry(PondModel p, String context) {
     );
     expect(b.x, inInclusiveRange(0, 1), reason: context);
     expect(b.y, inInclusiveRange(0, 1), reason: context);
+  }
+  checkPads(p, context);
+}
+
+/// Every pad stays inside its section and the basin, and no two pads overlap.
+void checkPads(PondModel p, String context) {
+  final pads = [...p.pads, ...p.ambientPads];
+  for (final pad in pads) {
+    final px = pad.x * 641;
+    final py = pad.y * 359;
+    expect(px.isFinite && py.isFinite && pad.vx.isFinite && pad.vy.isFinite,
+        isTrue,
+        reason: context);
+    final dx = px - pad.homeX * 641;
+    final dy = py - pad.homeY * 359;
+    expect(
+      dx * dx + dy * dy,
+      lessThanOrEqualTo(pad.sectionRadius * pad.sectionRadius + 1e-6),
+      reason: '$context pad ${pad.index} left its section',
+    );
+    expect(py - pad.radiusY, greaterThanOrEqualTo(p.basin.topY), reason: context);
+    expect(py + pad.radiusY, lessThanOrEqualTo(p.basin.bottomY), reason: context);
+    expect(px - pad.radiusX, greaterThanOrEqualTo(p.basin.leftX(py)),
+        reason: context);
+    expect(px + pad.radiusX, lessThanOrEqualTo(p.basin.rightX(py)),
+        reason: context);
+  }
+  for (var i = 0; i < pads.length; i++) {
+    for (var j = i + 1; j < pads.length; j++) {
+      final a = pads[i];
+      final b = pads[j];
+      final overlapX = (a.x - b.x).abs() * 641 < a.radiusX + b.radiusX;
+      final overlapY = (a.y - b.y).abs() * 359 < a.radiusY + b.radiusY;
+      expect(overlapX && overlapY, isFalse,
+          reason: '$context pads ${a.index} and ${b.index} overlap');
+    }
   }
 }
 
@@ -172,6 +210,9 @@ void main() {
         isTrue,
       );
       final positions = p.frogs.map((f) => [f.x, f.y, f.leafIndex]).toList();
+      final padPositions = [
+        for (final pad in [...p.pads, ...p.ambientPads]) [pad.x, pad.y],
+      ];
       final elapsed = p.elapsed;
       final ai = p.aiEvaluations;
       final endpoint = p.daylight;
@@ -193,6 +234,11 @@ void main() {
         expect(p.aiEvaluations, ai);
         expect(p.daylight, endpoint);
         expect(p.frogs.map((f) => [f.x, f.y, f.leafIndex]).toList(), positions);
+        // Slow pad drift freezes while the frogs sleep.
+        expect(
+          [for (final pad in [...p.pads, ...p.ambientPads]) [pad.x, pad.y]],
+          padPositions,
+        );
       }
     }
     // Print measured maxima even if a contract assertion below fails.
