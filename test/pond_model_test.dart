@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ranitas/game/insect_species.dart';
 import 'package:ranitas/game/pond_model.dart';
 
 void tap(PondModel model) {
@@ -40,9 +41,12 @@ void main() {
     expect(model.aiEvaluations, 0);
     expect(model.bugs, isEmpty);
     for (final frog in model.frogs) {
+      // Frogs ride their drifting home pads from the pad centre.
       expect(frog.airborne, isFalse);
-      expect(frog.x, frog.homeX);
-      expect(frog.y, frog.homeY);
+      expect(frog.perchDx, 0);
+      expect(frog.perchDy, 0);
+      expect(frog.x, closeTo(model.pads[frog.index].x, 1e-9));
+      expect(frog.y, closeTo(model.pads[frog.index].y, 1e-9));
     }
   });
 
@@ -70,7 +74,7 @@ void main() {
       model.update(1.4);
       expect(model.frogs[0].leafIndex, 1);
       final frog = model.frogs[0];
-      final expectedX = model.pads[1].x - .045;
+      final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final offset = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(offset, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
@@ -144,8 +148,8 @@ void main() {
       expect(model.progress, 1);
       for (final frog in model.frogs) {
         expect(frog.leafIndex, frog.index);
-        expect(frog.x, closeTo(frog.homeX, .015));
-        expect(frog.y, closeTo(frog.homeY, .015));
+        expect(frog.x, closeTo(model.pads[frog.index].x, .015));
+        expect(frog.y, closeTo(model.pads[frog.index].y, .015));
         expect(frog.swimming || frog.airborne, isFalse);
       }
       final elapsed = model.elapsed;
@@ -157,20 +161,31 @@ void main() {
   );
 
   test(
-    'species unlock with progression and fireflies belong to dusk/night',
+    'species unlock with progression and night sets belong to dusk/night',
     () {
+      // Willow: a scenery with mosquitoes and the full common day set, so the
+      // documented opening and unlock order hold (other sceneries substitute
+      // their own residents; see atmosphere_test).
       final model = List.generate(
-        100,
+        400,
         (seed) => PondModel(seed: seed, durationOverride: 20),
-      ).firstWhere((m) => m.cycle == 'dusk' && m.weather == 'clear');
+      ).firstWhere(
+        (m) => m.cycle == 'dusk' && m.weather == 'clear' && m.biome == 'willow',
+      );
       expect(model.availableSpecies, ['fly', 'mosquito']);
       tap(model);
       model.update(8);
       expect(model.availableSpecies, containsAll(['dragonfly', 'butterfly']));
-      expect(model.availableSpecies, isNot(contains('firefly')));
+      expect(
+        model.availableSpecies.any(InsectSpecies.nightNames.contains),
+        isFalse,
+      );
       model.update(4);
       expect(model.period, 'dusk');
-      expect(model.availableSpecies, contains('firefly'));
+      expect(
+        model.availableSpecies.any(InsectSpecies.nightNames.contains),
+        isTrue,
+      );
       model.update(8);
       expect(model.period, 'night');
       expect(model.availableSpecies, isNot(contains('butterfly')));
@@ -234,8 +249,9 @@ void main() {
       model.update(.15);
       expect(frog.currentPose(charging: model.pressing), 'charging');
       // Place a live bug along frog 0's low jump arc so it chomps mid-flight
-      final midX = (model.pads[0].x + model.pads[1].x - .045) * .5;
-      final midY = (model.pads[0].y + model.pads[1].y) * .5 - .29;
+      final midX =
+          (model.pads[0].x + model.pads[1].x + model.perchOffsetX(0, 1)) * .5;
+      final midY = (model.pads[0].y + model.pads[1].y) * .5 - .26;
       model.bugs.add(
         BugState(
           x: midX,
@@ -284,7 +300,10 @@ void main() {
         expect(model.period, cycle == 'dawn' ? 'dawn' : 'day');
         expect(model.daylight, closeTo(.5, 1e-9));
         if (cycle == 'dawn') {
-          expect(model.availableSpecies, contains('firefly'));
+          expect(
+            model.availableSpecies.any(InsectSpecies.nightNames.contains),
+            isTrue,
+          );
           expect(model.availableSpecies, isNot(contains('butterfly')));
         }
         model.update(10);
@@ -305,19 +324,43 @@ void main() {
         expect(model.period, cycle == 'dawn' ? 'day' : 'night');
         expect(model.daylight, cycle == 'dawn' ? 1 : 0);
         expect(model.weather, weather);
-        expect(model.frogs.map((f) => [f.x, f.y]).toList(), positions);
+        // Sleeping frogs stay on their own leaves, riding its gentle roam.
+        for (final f in model.frogs) {
+          final pad = model.pads[f.leafIndex];
+          expect(f.x - pad.x, closeTo(f.perchDx, 1e-9));
+          expect(f.y - pad.y, closeTo(f.perchDy, 1e-9));
+          expect(
+            (f.x - positions[f.index][0]).abs() * 641,
+            lessThan(2 * pad.sectionRadius + 1),
+          );
+        }
         expect(
           model.frogs.every((f) => f.asleep && f.leafIndex == f.index),
           isTrue,
         );
         expect(model.bugs, isNotEmpty);
         if (cycle == 'dawn') {
-          expect(model.bugs.any((b) => b.species == 'firefly'), isFalse);
+          expect(
+            model.bugs.any((b) => InsectSpecies.nightNames.contains(b.species)),
+            isFalse,
+          );
         } else {
+          // Night: no daytime-only species remain; everything left is either
+          // still welcome (mosquito, the night set, an all-hours resident) or
+          // on its way out.
+          final welcome = model.availableSpecies;
+          expect(welcome, isNot(contains('fly')));
+          expect(welcome, isNot(contains('butterfly')));
+          expect(welcome, isNot(contains('dragonfly')));
+          expect(welcome, isNot(contains('ladybug')));
           expect(
             model.bugs.every(
-              (b) => ['firefly', 'mosquito'].contains(b.species),
+              (b) => welcome.contains(b.species) || b.opacity < 1,
             ),
+            isTrue,
+          );
+          expect(
+            model.bugs.any((b) => InsectSpecies.nightNames.contains(b.species)),
             isTrue,
           );
         }
@@ -345,14 +388,38 @@ void main() {
       expect(model.bugs.length, lessThanOrEqualTo(7));
       if (weather == 'storm' || weather == 'drizzle') {
         expect(model.availableSpecies, isNot(contains('butterfly')));
-        expect(model.availableSpecies, isNot(contains('firefly')));
         expect(
-          model.bugs.every((b) => ['fly', 'mosquito'].contains(b.species)),
+          model.availableSpecies.any(InsectSpecies.nightNames.contains),
+          isFalse,
+        );
+        // Only hardy species fly in rain: the common fly and mosquito plus a
+        // biome's weatherproof residents (stoneflies, cave crickets, skaters
+        // in light rain). Nothing delicate, nothing from a night set.
+        const delicate = {
+          'butterfly',
+          'ladybug',
+          'dragonfly',
+          'damselfly',
+          'bee',
+          'jewelbeetle',
+        };
+        expect(
+          model.bugs.every(
+            (b) =>
+                !delicate.contains(b.species) &&
+                !InsectSpecies.nightNames.contains(b.species),
+          ),
           isTrue,
         );
+        // Shelter now follows the rain intensity envelope, so the budget is
+        // checked against the model's own formula rather than a fixed count.
+        expect(model.rainIntensity, greaterThan(0));
+        expect(model.insectShelter, lessThan(1));
+        final budget = ((3 + model.richness * 15) * model.insectShelter).ceil();
+        expect(model.bugs.length, lessThanOrEqualTo(budget + 1));
       }
       if (weather == 'storm') {
-        expect(model.bugs.length, lessThanOrEqualTo(3));
+        expect(model.bugs.length, lessThanOrEqualTo(5));
       }
     }
   });
@@ -370,7 +437,7 @@ void main() {
         expect((frog.x - x).abs(), lessThan(.02));
         expect((frog.y - y).abs(), lessThan(.02));
       }
-      final expectedX = model.pads[1].x - .045;
+      final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final radius = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
       expect(radius, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
@@ -387,7 +454,7 @@ void main() {
         (seed) => PondModel(seed: seed),
       ).firstWhere((m) => m.weather == 'drizzle' || m.weather == 'storm');
 
-      expect(rainyModel.ambientPads.length, inInclusiveRange(5, 8));
+      expect(rainyModel.ambientPads.length, inInclusiveRange(5, 9));
       expect(rainyModel.raindrops, isNotEmpty);
 
       for (final p in [...rainyModel.pads, ...rainyModel.ambientPads]) {

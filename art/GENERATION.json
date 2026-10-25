@@ -1,0 +1,263 @@
+{
+  "tool": "built-in image_gen",
+  "date": "2026-10-25",
+  "normalization": "scripts/import-generated-art.mjs",
+  "assets": [
+    {
+      "source": "art/source/canopy-willow.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for willow pond: cascading willow fronds, long thin green leaf strands. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-willow.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for willow: cascading willow fronds, long thin green leaf strands. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-willow.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching willow vegetation (cascading willow fronds, long thin green leaf strands). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-willow.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to willow pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-willow.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for willow pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to cascading willow fronds, long thin green leaf strands, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-blossom.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for blossom pond: cherry branches and pink blossom clusters, broad leaves. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-blossom.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for blossom: cherry branches and pink blossom clusters, broad leaves. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-blossom.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching blossom vegetation (cherry branches and pink blossom clusters, broad leaves). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-blossom.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to blossom pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-blossom.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for blossom pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to cherry branches and pink blossom clusters, broad leaves, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-cypress.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for cypress pond: cypress boughs, hanging Spanish moss, broad teal leaves. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-cypress.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for cypress: cypress boughs, hanging Spanish moss, broad teal leaves. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-cypress.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching cypress vegetation (cypress boughs, hanging Spanish moss, broad teal leaves). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-cypress.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to cypress pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-cypress.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for cypress pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to cypress boughs, hanging Spanish moss, broad teal leaves, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-maple.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for maple pond: crimson orange and gold five-lobed momiji maple leaves. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-maple.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for maple: crimson orange and gold five-lobed momiji maple leaves. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-maple.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching maple vegetation (crimson orange and gold five-lobed momiji maple leaves). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-maple.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to maple pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-maple.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for maple pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to crimson orange and gold five-lobed momiji maple leaves, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for sanctuary pond: emerald bamboo leaves and culm tops, one hanging amber paper lantern. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Production game leaf sprite atlas. ONLY slender emerald bamboo leaf blades. Exactly 8 columns by4 rows of isolated leaves, evenly spaced square cells in 2:1 canvas. Columns1-4 branch leaves four shape/tone variants, columns5-8 bush leaves four variants of SAME LEAF SPECIES. Row1 large leaves; row2 identical leaves60% size; row3 identical to row1 one tone lighter with one highlight pixel; row4 identical to row2 one tone lighter. Each leaf centred in its own cell. True 16x16 effective pixel grid per cell. Transparent background. No lanterns, mushrooms, crystals, stones, flowers, branches, text, borders, grid lines or scenery. Crisp hard square pixels, no antialias."
+    },
+    {
+      "source": "art/source/branches-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching sanctuary vegetation (emerald bamboo leaves and culm tops, one hanging amber paper lantern). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to sanctuary pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for sanctuary pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to emerald bamboo leaves and culm tops, one hanging amber paper lantern, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for grotto pond: dripping limestone stalactites, hanging vines, fern fronds and glowing cyan violet moss. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-grotto.png",
+      "prompt": "Use case: stylized-concept. Production game leaf sprite atlas. ONLY curling fern fronds, moss green and teal. Exactly 8 columns by4 rows of isolated leaves, evenly spaced square cells in 2:1 canvas. Columns1-4 branch leaves four shape/tone variants, columns5-8 bush leaves four variants of SAME LEAF SPECIES. Row1 large leaves; row2 identical leaves60% size; row3 identical to row1 one tone lighter with one highlight pixel; row4 identical to row2 one tone lighter. Each leaf centred in its own cell. True 16x16 effective pixel grid per cell. Transparent background. No lanterns, mushrooms, crystals, stones, flowers, branches, text, borders, grid lines or scenery. Crisp hard square pixels, no antialias."
+    },
+    {
+      "source": "art/source/branches-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching grotto vegetation (dripping limestone stalactites, hanging vines, fern fronds and glowing cyan violet moss). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-grotto.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to grotto pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for grotto pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to dripping limestone stalactites, hanging vines, fern fronds and glowing cyan violet moss, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-alpine.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for alpine pond: pine needles and golden larch boughs with snow dust. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-alpine.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for alpine: pine needles and golden larch boughs with snow dust. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-alpine.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching alpine vegetation (pine needles and golden larch boughs with snow dust). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-alpine.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to alpine pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-alpine.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for alpine pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to pine needles and golden larch boughs with snow dust, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-lotus.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for lotus pond: peach cherry blossom clusters and lavender wisteria raceme bits. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-lotus.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for lotus: peach cherry blossom clusters and lavender wisteria raceme bits. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-lotus.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching lotus vegetation (peach cherry blossom clusters and lavender wisteria raceme bits). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-lotus.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to lotus pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-lotus.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for lotus pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to peach cherry blossom clusters and lavender wisteria raceme bits, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-firefly.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for firefly pond: cypress boughs, long Spanish moss and broad teal leaves. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-firefly.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for firefly: cypress boughs, long Spanish moss and broad teal leaves. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-firefly.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching firefly vegetation (cypress boughs, long Spanish moss and broad teal leaves). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-firefly.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to firefly pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-firefly.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for firefly pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to cypress boughs, long Spanish moss and broad teal leaves, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-autumn-mist.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for autumn-mist pond: crimson orange gold five-lobed momiji maple leaves in mist. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-autumn-mist.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Leaf sprite atlas for autumn-mist: crimson orange gold five-lobed momiji maple leaves in mist. Exactly 8 columns x4 rows, evenly spaced isolated sprites on transparent background, overall 2:1 aspect ratio. Each cell 32x32 pixels (16x16 effective). Columns 1–4 four variations branch leaf, columns 5–8 four variations bush leaf. Row1 large leaves, row2 same leaves at 60% size, row3 same as row1 one tone lighter with highlight, row4 same as row2 one tone lighter. Sprites centred in cell; hanging blades attach at top centre. No branches, scenery or cell lines. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/branches-autumn-mist.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching autumn-mist vegetation (crimson orange gold five-lobed momiji maple leaves in mist). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-autumn-mist.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to autumn-mist pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-autumn-mist.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for autumn-mist pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to crimson orange gold five-lobed momiji maple leaves in mist, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-jade-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for jade-sanctuary pond: jade bamboo leaves and culm tops, one hanging amber paper lantern. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-jade-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Production game leaf sprite atlas. ONLY slender emerald bamboo leaf blades. Exactly 8 columns by4 rows of isolated leaves, evenly spaced square cells in 2:1 canvas. Columns1-4 branch leaves four shape/tone variants, columns5-8 bush leaves four variants of SAME LEAF SPECIES. Row1 large leaves; row2 identical leaves60% size; row3 identical to row1 one tone lighter with one highlight pixel; row4 identical to row2 one tone lighter. Each leaf centred in its own cell. True 16x16 effective pixel grid per cell. Transparent background. No lanterns, mushrooms, crystals, stones, flowers, branches, text, borders, grid lines or scenery. Crisp hard square pixels, no antialias."
+    },
+    {
+      "source": "art/source/branches-jade-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching jade-sanctuary vegetation (jade bamboo leaves and culm tops, one hanging amber paper lantern). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-jade-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to jade-sanctuary pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-jade-sanctuary.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for jade-sanctuary pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to jade bamboo leaves and culm tops, one hanging amber paper lantern, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/canopy-crystal-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent top canopy layer for crystal-grotto pond: limestone stalactites, blue lilac fern fronds, hanging vines, glowing cyan violet crystals and moss. Wide 1376x384 composition corresponding to TOP HALF of scene; foliage grows from upper left and right corners only. Central half x344–1032 MUST be fully transparent below y230. Bottom central area fully transparent. No banks, water or background. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/foliage-crystal-grotto.png",
+      "prompt": "Use case: stylized-concept. Production game leaf sprite atlas. ONLY curling fern fronds, blue-lilac. Exactly 8 columns by4 rows of isolated leaves, evenly spaced square cells in 2:1 canvas. Columns1-4 branch leaves four shape/tone variants, columns5-8 bush leaves four variants of SAME LEAF SPECIES. Row1 large leaves; row2 identical leaves60% size; row3 identical to row1 one tone lighter with one highlight pixel; row4 identical to row2 one tone lighter. Each leaf centred in its own cell. True 16x16 effective pixel grid per cell. Transparent background. No lanterns, mushrooms, crystals, stones, flowers, branches, text, borders, grid lines or scenery. Crisp hard square pixels, no antialias."
+    },
+    {
+      "source": "art/source/branches-crystal-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Game bark segment sprite strip matching crystal-grotto vegetation (limestone stalactites, blue lilac fern fronds, hanging vines, glowing cyan violet crystals and moss). Exactly SIX evenly spaced cells in a SINGLE horizontal row, total aspect ratio 18:1. Each cell contains one HORIZONTAL bark segment from left-centre to right-centre. Cells 1–5 taper successively from thick root to thin twig, cell6 spare thin twig. Coarse crisp bark texture, 3–4 effective pixel thickness at root, 1–2 at tip, small twig stubs. Transparent background. No foliage or scenery. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/midbank-crystal-grotto.png",
+      "prompt": "Use case: stylized-concept. Production game transparent cutout layer. Widescreen 16:9 1376x768 canvas. Draw ONLY LOW GROUND-LEVEL SHORE OBJECTS: scattered small wet stones, moss tufts, short reeds, small ferns, little shrubs appropriate to crystal-grotto pond. Arrange a narrow distant bank strip across y350-410, with ground objects at far left and far right edges down to lower corners. All objects short and low, no taller than 80 pixels. All y0-270 completely transparent. Central pond x344–1032 below y420 fully transparent. No trees, tree trunks, boughs, branches from top, canopy, hanging leaves, sky, horizon scenery, water, animals, letters or grid. Crisp square pixel art, 1990s adventure game jewel teal indigo lavender peach amber. Real transparent background. It is a shore-object overlay ONLY, not a full environment."
+    },
+    {
+      "source": "art/source/foreground-crystal-grotto.png",
+      "prompt": "Use case: stylized-concept. Asset type: production pixel-art game layer. Transparent FOREGROUND scenery overlay for crystal-grotto pond. 1376x768 widescreen. Mossy rocks, reeds, flowers, low foliage appropriate to limestone stalactites, blue lilac fern fronds, hanging vines, glowing cyan violet crystals and moss, confined to LOWER LEFT and LOWER RIGHT corners. Central water lane and entire top two-thirds fully transparent. No water, sky, background, animals or top branches. Style: 1990s adventure game, crisp hand-placed square pixels, jewel teal indigo lavender amber peach. Real transparent alpha, no antialiasing, no text, UI, borders or watermark. Reference is style and palette only, never copy its opaque background."
+    },
+    {
+      "source": "art/source/frog-teal-sheet.png",
+      "prompt": "4×2 sprite atlas; character identity from original reference; true 42×36 effective pixels per cell; transparent background; side or depth pose order from ASSET_REQUESTS.md sections 1 and 7."
+    },
+    {
+      "source": "art/source/frog-meadow-depth-sheet.png",
+      "prompt": "4×2 sprite atlas; character identity from original reference; true 42×36 effective pixels per cell; transparent background; side or depth pose order from ASSET_REQUESTS.md sections 1 and 7."
+    },
+    {
+      "source": "art/source/frog-teal-depth-sheet.png",
+      "prompt": "4×2 sprite atlas; character identity from original reference; true 42×36 effective pixels per cell; transparent background; side or depth pose order from ASSET_REQUESTS.md sections 1 and 7."
+    },
+    {
+      "source": "art/source/frog-meadow-sheet.png",
+      "prompt": "4×2 emerald meadow frog atlas; idle, crouch, launch, ascend / chomp, fall, swallow, sleep; original reference identity; crisp 42×36 effective pixel grid; real transparent alpha; no scenery."
+    }
+  ]
+}

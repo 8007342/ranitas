@@ -9,6 +9,8 @@ extension type _RanitasAudio(JSObject _) implements JSObject {
     JSNumber richness,
     JSString weather,
     JSBoolean sleeping,
+    JSNumber rainIntensity,
+    JSString species,
   );
   external void suspend();
   external void resume();
@@ -19,9 +21,27 @@ extension type _RanitasAudio(JSObject _) implements JSObject {
 class PondAmbience {
   bool _disposed = false;
 
-  void update(double progress, double richness, String weather, bool sleeping) {
+  /// [rainIntensity] (0–1) lets storm thunder follow the downpours; [species]
+  /// is the model's compact `voice:count,…` presence string for the insect
+  /// voices. Both are optional on the JavaScript side, so an older script
+  /// ignores them.
+  void update(
+    double progress,
+    double richness,
+    String weather,
+    bool sleeping, {
+    double rainIntensity = 0,
+    String species = '',
+  }) {
     if (_disposed) return;
-    _audio?.update(progress.toJS, richness.toJS, weather.toJS, sleeping.toJS);
+    _audio?.update(
+      progress.toJS,
+      richness.toJS,
+      weather.toJS,
+      sleeping.toJS,
+      rainIntensity.toJS,
+      species.toJS,
+    );
   }
 
   void suspend() {

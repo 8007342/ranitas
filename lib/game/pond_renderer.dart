@@ -2,16 +2,35 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'frog_sprites.dart';
+import 'palette_cycle.dart';
 import 'pond_model.dart';
+import 'scene_grade.dart';
+import 'scene_layers.dart';
 
 /// Widescreen pixel pond scenery implementing the 6-Tier Composable Rendering
 /// Architecture (`art/INTERACTION_STYLEGUIDE.md`). The caller retains ownership
-/// of [backdrop], [frogSheets], and [wildlifeSheet].
+/// of [backdrop], [emissive], [frogSheets], [frogDepthSheets], [wildlifeSheet],
+/// the optional images on [layers] and the baked [cycles].
 class PondRenderer {
   ui.Image? backdrop;
+
+  /// Optional emissive mask for [backdrop] (alpha = light); null falls back to
+  /// plain grading. See `scripts/make-emissive.mjs`.
+  ui.Image? emissive;
   List<ui.Image?> frogSheets = [null, null];
+
+  /// Optional 4×2 back/front-view sheets per frog; `null` falls back to the
+  /// procedural away/toward poses.
+  List<ui.Image?> frogDepthSheets = [null, null];
   ui.Image? wildlifeSheet;
   bool reducedMotion = false;
+
+  /// Data-driven layer stack (design D5); holds the optional canopy, mid-bank
+  /// and foreground images.
+  final SceneLayerPainter layers = SceneLayerPainter();
+
+  /// Palette-cycle regions baked for the current backdrop (design D4).
+  List<PaletteCycle> cycles = const [];
 
   static const double logicalWidth = 641;
   static const double logicalHeight = 359;
@@ -59,6 +78,103 @@ class PondRenderer {
       _rect(c, x - span, y + row, span * 2, 1, color, opacity);
     }
   }
+
+  /// Scanline oval with the pad's radial slit left unpainted, so the water,
+  /// ripples and fish beneath show through the gap. Each row is split around
+  /// the slit's column interval; [lens] (an optional second oval centre
+  /// offset in y with the same radii) clips the row to both ovals, which
+  /// draws the floor of an upturned-rim pad behind its near rim.
+  void _ovalCut(
+    ui.Canvas c,
+    double x,
+    double y,
+    double rx,
+    double ry,
+    int color,
+    double opacity,
+    _Slit slit, {
+    double? lens,
+  }) {
+    if (rx <= 0 || ry <= 0 || opacity <= 0) return;
+    _paint.color = ui.Color(color).withValues(alpha: opacity.clamp(0.0, 1.0));
+    final gaps = <double>[0, 0, 0, 0];
+    for (var row = -ry.floor(); row <= ry.floor(); row++) {
+      var span = rx * math.sqrt(math.max(0, 1 - row * row / (ry * ry)));
+      if (lens != null) {
+        final shifted = row + lens;
+        span = math.min(
+          span,
+          rx * math.sqrt(math.max(0, 1 - shifted * shifted / (ry * ry))),
+        );
+      }
+      if (span <= 0) continue;
+      final rowY = (y + row).roundToDouble();
+      final left = (x - span).roundToDouble();
+      final right = left + (span * 2).ceilToDouble();
+      final n = slit.gapsOnRow(rowY, left, right, gaps);
+      var cursor = left;
+      for (var g = 0; g < n; g++) {
+        final lo = gaps[g * 2];
+        final hi = gaps[g * 2 + 1];
+        if (lo > cursor) {
+          c.drawRect(ui.Rect.fromLTRB(cursor, rowY, lo, rowY + 1), _paint);
+        }
+        cursor = math.max(cursor, hi);
+      }
+      if (right > cursor) {
+        c.drawRect(ui.Rect.fromLTRB(cursor, rowY, right, rowY + 1), _paint);
+      }
+    }
+  }
+
+  /// One-pixel line that leaves the slit wedge unpainted (veins and ribs).
+  void _lineCut(
+    ui.Canvas c,
+    double x,
+    double y,
+    double tx,
+    double ty,
+    int color,
+    double opacity,
+    _Slit slit,
+  ) {
+    final steps = math.max((tx - x).abs(), (ty - y).abs()).ceil();
+    for (var i = 0; i <= steps; i++) {
+      final p = steps == 0 ? 0.0 : i / steps;
+      final px = (x + (tx - x) * p).roundToDouble();
+      final py = (y + (ty - y) * p).roundToDouble();
+      if (slit.contains(px, py)) continue;
+      _rect(c, px, py, 1, 1, color, opacity);
+    }
+  }
+
+  /// Screen point at [fraction] of the pad radius along its slit centreline,
+  /// for a pad whose body centre is drawn at ([cx], [cy]).
+  static (double, double) slitPoint(
+    PadState pad,
+    double cx,
+    double cy,
+    double fraction,
+  ) {
+    final theta = pad.slitAngle;
+    return (
+      cx + math.cos(theta) * pad.radiusX * fraction,
+      cy + math.sin(theta) * pad.radiusY * fraction,
+    );
+  }
+
+  /// Paints one lily pad with its body centre at ([x], [y]) before drift and
+  /// dip; exposed for pixel checks of the see-through slit.
+  void drawPad(
+    ui.Canvas c,
+    PadState pad,
+    double x,
+    double y, {
+    double t = 0,
+    double motion = 0,
+    String biome = 'willow',
+    double depth = 1,
+  }) => _pad(c, pad, x, y, t, motion, biome, depth);
 
   void _ovalRing(
     ui.Canvas c,
@@ -189,35 +305,49 @@ class PondRenderer {
         : .03 + .97 * model.richness.clamp(0.0, 1.0);
     final progress = model.progress.clamp(0.0, 1.0);
     final night = (1 - model.daylight).clamp(0.0, 1.0);
+    layers.reducedMotion = reducedMotion;
     canvas.save();
     canvas.clipRect(ui.Offset.zero & size);
     canvas.scale(size.width / _width, size.height / _height);
 
-    // TIER 0: Full-bleed Composable Scenic Backdrop & Sky
+    // TIER 0: Full-bleed Composable Scenic Backdrop & Sky, colour-graded
+    // continuously on daylight and rain (scene_grade.dart) instead of a flat
+    // night wash, then emissive lights added back where a mask exists.
     final source = backdrop;
+    final grade = SceneGrade.filterFor(model);
+    const frame = ui.Rect.fromLTWH(0, 0, _width, _height);
     if (source == null) {
-      canvas.drawPicture(_scenery!);
+      if (grade == null) {
+        canvas.drawPicture(_scenery!);
+      } else {
+        canvas.saveLayer(frame, ui.Paint()..colorFilter = grade);
+        canvas.drawPicture(_scenery!);
+        canvas.restore();
+      }
     } else {
+      final sourceRect = ui.Rect.fromLTWH(
+        0,
+        0,
+        source.width.toDouble(),
+        source.height.toDouble(),
+      );
       _paint
         ..color = const ui.Color(0xffffffff)
-        ..filterQuality = ui.FilterQuality.none;
-      canvas.drawImageRect(
-        source,
-        ui.Rect.fromLTWH(
-          0,
-          0,
-          source.width.toDouble(),
-          source.height.toDouble(),
-        ),
-        const ui.Rect.fromLTWH(0, 0, _width, _height),
-        _paint,
-      );
+        ..filterQuality = ui.FilterQuality.none
+        ..colorFilter = grade;
+      canvas.drawImageRect(source, sourceRect, frame, _paint);
+      _paint.colorFilter = null;
+      _emissive(canvas, source, sourceRect, frame, model, night);
     }
-    _rect(canvas, 0, 0, _width, _height, 0xff101f48, .06 + night * .60);
+    // Palette-cycled waterfalls, streams and glows sit on the graded backdrop.
+    for (final cycle in cycles) {
+      cycle.draw(canvas, t, reducedMotion: reducedMotion, grade: grade);
+    }
     if (model.cycle == 'dawn') {
       _rect(canvas, 0, 0, _width, 185, 0xffffc68e, progress * .12);
     }
     _sky(canvas, model, night);
+    layers.drawSlot(canvas, LayerSlot.farBank, model, motion);
 
     // TIER 1: Sub-Surface Water Caustics & Submerged Stems
     _waterCaustics(canvas, model, motion);
@@ -228,65 +358,115 @@ class PondRenderer {
     // TIER 3: Composable Water Surface Shimmer & Expanding Refraction Ripples
     // (Rendered OVER Koi & Tadpoles so ripples refract across underlying sprites)
     _waterSurfaceAndRipples(canvas, model, motion);
+    layers.drawSlot(canvas, LayerSlot.midBank, model, motion);
 
-    // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Splash Droplets, Frogs & Bugs
-    final allPads = <(PadState, double, double, double)>[
-      for (final p in model.ambientPads)
+    // TIER 4: Floating Interactive Lily Pads (Ambient + Hero), Lotus Blooms, Frogs
+    // (sorted with the pads by ground y so a far frog passes behind a near pad),
+    // Splash Droplets & Bugs
+    double padSortY(PadState p) =>
+        _height * p.y +
+        3 +
+        p.floatY +
+        (p.index == 0
+            ? model.leafNudge * 2
+            : p.index == 1
+            ? -model.leafNudge * 2
+            : 0);
+    final tier4 = <(double, void Function())>[
+      for (final p in [...model.ambientPads, ...model.pads])
         (
-          p,
-          _width * p.x,
-          _height * p.y + 3 + p.floatY,
-          t + p.index * 1.1,
+          padSortY(p),
+          () => _pad(
+            canvas,
+            p,
+            _width * p.x,
+            padSortY(p),
+            p.isAmbient ? t + p.index * 1.1 : t + p.index * 2,
+            motion,
+            model.biome,
+            model.basin.depthAt(p.y * _height),
+          ),
         ),
-      (
-        model.pads[0],
-        _width * model.pads[0].x,
-        _height * model.pads[0].y + 3 + model.leafNudge * 2 + model.pads[0].floatY,
-        t,
-      ),
-      (
-        model.pads[1],
-        _width * model.pads[1].x,
-        _height * model.pads[1].y + 3 - model.leafNudge * 2 + model.pads[1].floatY,
-        t + 2,
-      ),
-    ]..sort((a, b) => a.$3.compareTo(b.$3));
-
-    for (final entry in allPads) {
-      _pad(
-        canvas,
-        entry.$1,
-        entry.$2,
-        entry.$3,
-        entry.$4,
-        motion,
-        model.biome,
-      );
+      for (final frog in model.frogs)
+        (
+          // A perched frog sorts just after its own pad; in flight it follows
+          // the ground point under the arc.
+          (frog.airborne || frog.swimming
+                  ? frog.groundY * _height + 3
+                  : padSortY(model.pads[frog.leafIndex])) +
+              .01,
+          () => FrogSprites.renderFrog(
+            canvas: canvas,
+            paint: _paint,
+            frog: frog,
+            model: model,
+            motion: motion,
+            reducedMotion: reducedMotion,
+            sheet: frog.index < frogSheets.length
+                ? frogSheets[frog.index]
+                : null,
+            depthSheet: frog.index < frogDepthSheets.length
+                ? frogDepthSheets[frog.index]
+                : null,
+          ),
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    for (final entry in tier4) {
+      entry.$2();
     }
     _splashDroplets(canvas, model);
-
-    for (final frog in model.frogs) {
-      final sheet = frog.index < frogSheets.length
-          ? frogSheets[frog.index]
-          : null;
-      FrogSprites.renderFrog(
-        canvas: canvas,
-        paint: _paint,
-        frog: frog,
-        model: model,
-        motion: motion,
-        reducedMotion: reducedMotion,
-        sheet: sheet,
-      );
-    }
     for (final bug in model.bugs) {
       if (bug.alive) _bug(canvas, bug, model);
     }
+    layers.drawSlot(canvas, LayerSlot.canopy, model, motion);
+    layers.drawSlot(canvas, LayerSlot.particles, model, motion);
 
     // TIER 5: Shore Foliage, Biome Atmospheric Motifs & Weather
     _foliage(canvas, model, motion, source != null);
     _motifs(canvas, model, motion, night);
     _weather(canvas, model, motion);
+    layers.drawSlot(canvas, LayerSlot.nearCorner, model, motion);
+    canvas.restore();
+  }
+
+  /// Lanterns, fungi, windows, moon and stars survive the night grade: the
+  /// ungraded backdrop, cut to the mask (`dstIn`), is added (`plus`) at
+  /// `night × richness`. Skipped when there is no mask or nothing to add.
+  void _emissive(
+    ui.Canvas canvas,
+    ui.Image source,
+    ui.Rect sourceRect,
+    ui.Rect frame,
+    PondModel model,
+    double night,
+  ) {
+    final mask = emissive;
+    if (mask == null) return;
+    final strength = (night * model.richness.clamp(0.0, 1.0) * .85).clamp(
+      0.0,
+      1.0,
+    );
+    if (strength < .02) return;
+    canvas.saveLayer(
+      frame,
+      ui.Paint()
+        ..blendMode = ui.BlendMode.plus
+        ..color = ui.Color.fromRGBO(255, 255, 255, strength),
+    );
+    canvas.drawImageRect(
+      source,
+      sourceRect,
+      frame,
+      ui.Paint()..filterQuality = ui.FilterQuality.none,
+    );
+    canvas.drawImageRect(
+      mask,
+      ui.Rect.fromLTWH(0, 0, mask.width.toDouble(), mask.height.toDouble()),
+      frame,
+      ui.Paint()
+        ..filterQuality = ui.FilterQuality.none
+        ..blendMode = ui.BlendMode.dstIn,
+    );
     canvas.restore();
   }
 
@@ -342,7 +522,8 @@ class PondRenderer {
       final px = pad.x * _width + pad.driftX * .5;
       final py = pad.y * _height + 5 + pad.floatY + pad.dipY * .5;
       final sway = math.sin(m.time * .6 + pad.index) * 2.5 * motion;
-      final stemLen = pad.isAmbient ? 16.0 : 28.0;
+      final stemLen =
+          (pad.isAmbient ? 16.0 : 28.0) * m.basin.perspectiveAt(pad.y * _height);
       _line(c, px, py, px + sway, py + stemLen, 0xff0d333b, .35, pad.isAmbient ? 1 : 2);
     }
   }
@@ -645,6 +826,7 @@ class PondRenderer {
     double t,
     double motion,
     String biome,
+    double depth,
   ) {
     final bob = math.sin(t * .7) * .8 * motion;
     final px = x + pad.driftX;
@@ -660,20 +842,51 @@ class PondRenderer {
 
     final isGrotto = biome == 'grotto' || biome == 'crystal_grotto';
     final isMaple = biome == 'maple' || biome == 'autumn_mist';
-    final padMid = isGrotto
-        ? 0xff288588
-        : isMaple
-        ? 0xff3b785f
-        : 0xff32776a;
-    final padLight = isGrotto
-        ? 0xff49b0a8
-        : isMaple
-        ? 0xff5ca177
-        : 0xff49947a;
+    // Far pads haze toward the water tone (design D6: `vd × 0.12`).
+    final hazeAmount = (1 - depth) * .12;
+    int hazed(int color) => hazeAmount <= 0
+        ? color
+        : ui.Color.lerp(
+            ui.Color(color),
+            const ui.Color(0xff2f5d66),
+            hazeAmount,
+          )!.toARGB32();
+    final padMid = hazed(
+      isGrotto
+          ? 0xff288588
+          : isMaple
+          ? 0xff3b785f
+          : 0xff32776a,
+    );
+    final padLight = hazed(
+      isGrotto
+          ? 0xff49b0a8
+          : isMaple
+          ? 0xff5ca177
+          : 0xff49947a,
+    );
+    final padRim = hazed(0xff143e3a);
     final veinColor = isGrotto ? 0xff92efe3 : 0xffb7cd86;
 
-    // 1. Subsurface pad shadow (expands slightly when pad dips into water)
-    _oval(
+    // The pad turns in its own plane: the slit, veins, rim notch and lotus
+    // anchor all sit at pad-plane angles offset by the yaw and project through
+    // (cos θ · rx, sin θ · ry). The slit is a real gap in every scanline fill,
+    // so the water and the fish beneath show through it.
+    final theta = pad.slitAngle;
+    final foldCompressX = fold * 2.8 * scaleRatio;
+    final bodyCenterX = px - foldSide * foldCompressX * .5;
+    final bodyRx = math.max(3.5, rx - foldCompressX * .5);
+    final slitHalf = pad.isSuper ? .085 : .11;
+    final slit = _Slit(bodyCenterX, py, theta, slitHalf, bodyRx, ry, .12);
+    double angleGap(double phi) {
+      var d = (phi - theta) % (math.pi * 2);
+      if (d > math.pi) d -= math.pi * 2;
+      return d.abs();
+    }
+
+    // 1. Subsurface pad shadow (expands slightly when pad dips into water);
+    //    light falls through the same gap, so the shadow shares the wedge.
+    _ovalCut(
       c,
       px,
       py + 4 * scaleRatio - pad.dipY * .3,
@@ -681,97 +894,83 @@ class PondRenderer {
       ry + 1,
       0xff092d3d,
       .44,
+      slit,
     );
 
-    // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
-    final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
-    if (rimLift > 0.5) {
-      final liftedSide = tilt >= 0 ? -1.0 : 1.0;
-      _oval(
-        c,
-        px + liftedSide * 2.2 * scaleRatio,
-        py + 2.0 * scaleRatio,
-        rx - 1,
-        ry,
-        0xff6b3a50,
-        (rimLift / 3.5).clamp(0.35, 0.92),
-      );
-    }
-
-    // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
-    final foldCompressX = fold * 2.8 * scaleRatio;
-    final bodyCenterX = px - foldSide * foldCompressX * .5;
-    final bodyRx = math.max(3.5, rx - foldCompressX * .5);
-    _oval(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, 0xff143e3a);
-    _oval(c, bodyCenterX, py, bodyRx, ry, padMid);
-    if (bodyRx > 6 && ry > 3.2) {
-      _oval(
-        c,
-        bodyCenterX - 2.5 * scaleRatio,
-        py - 1.5 * scaleRatio + tilt * 3 * scaleRatio,
-        bodyRx - 3.5 * scaleRatio,
-        math.max(1.5, ry - 1.8 * scaleRatio),
-        padLight,
-      );
-    }
-
-    // 4. Center water-cup depression when frog lands in Zone A (center)
-    if (pad.dipY > 1.0 && fold < 0.35) {
-      final cupAlpha = ((pad.dipY - 1.0) / 3.5).clamp(0.0, 0.55);
-      _oval(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58, cupAlpha);
-    }
-
-    // 5. Radial leaf veins & V-notch
-    if (scaleRatio > 0.55) {
-      _line(
-        c,
-        bodyCenterX - bodyRx + 5 * scaleRatio,
-        py - 3 * scaleRatio,
-        bodyCenterX - 6 * scaleRatio,
-        py - ry + 1,
-        0xff90bc84,
-        .8,
-      );
-      for (var i = -3; i <= 3; i++) {
-        _line(
+    if (pad.isSuper) {
+      _superPadBody(c, pad, px, py, bodyRx, ry, scaleRatio, depth, slit, theta,
+          hazed, angleGap);
+    } else {
+      // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
+      final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
+      if (rimLift > 0.5) {
+        final liftedSide = tilt >= 0 ? -1.0 : 1.0;
+        _ovalCut(
           c,
-          bodyCenterX,
-          py + 1,
-          bodyCenterX + i * bodyRx * .26,
-          py - ry + 3 * scaleRatio + i * tilt * 2.5,
-          veinColor,
-          .28,
+          px + liftedSide * 2.2 * scaleRatio,
+          py + 2.0 * scaleRatio,
+          rx - 1,
+          ry,
+          0xff6b3a50,
+          (rimLift / 3.5).clamp(0.35, 0.92),
+          slit,
         );
       }
-    }
-    _line(
-      c,
-      bodyCenterX,
-      py + 1,
-      bodyCenterX + bodyRx - 1,
-      py + ry - 1.5 * scaleRatio,
-      0xff153f42,
-      1,
-      scaleRatio > 0.65 ? 2 : 1,
-    );
-    if (scaleRatio > 0.5) {
-      _line(
-        c,
-        bodyCenterX + 1,
-        py + 2,
-        bodyCenterX + bodyRx - 2,
-        py + ry - 1,
-        0xff67a47b,
-      );
-      _rect(
-        c,
-        bodyCenterX - bodyRx + 7 * scaleRatio,
-        py + 1.5 * scaleRatio,
-        7 * scaleRatio,
-        1,
-        0xff94c195,
-        .65,
-      );
+
+      // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
+      _ovalCut(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, padRim, 1, slit);
+      _ovalCut(c, bodyCenterX, py, bodyRx, ry, padMid, 1, slit);
+      if (bodyRx > 6 && ry > 3.2) {
+        _ovalCut(
+          c,
+          bodyCenterX - 2.5 * scaleRatio,
+          py - 1.5 * scaleRatio + tilt * 3 * scaleRatio,
+          bodyRx - 3.5 * scaleRatio,
+          math.max(1.5, ry - 1.8 * scaleRatio),
+          padLight,
+          1,
+          slit,
+        );
+      }
+
+      // 4. Center water-cup depression when frog lands in Zone A (center)
+      if (pad.dipY > 1.0 && fold < 0.35) {
+        final cupAlpha = ((pad.dipY - 1.0) / 3.5).clamp(0.0, 0.55);
+        _ovalCut(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58,
+            cupAlpha, slit);
+      }
+
+      // 5. Radial leaf veins, eight around the pad plane turning with it,
+      //    none inside the slit; the lit streak stays on the sunward side and
+      //    is skipped while the slit points that way.
+      if (scaleRatio > 0.55) {
+        for (var k = 0; k < 8; k++) {
+          final phi = theta + (k + .5) * math.pi / 4;
+          final reach = bodyRx - 2 * scaleRatio;
+          final lift = math.cos(phi) * reach * math.sin(tilt) * .38;
+          _lineCut(
+            c,
+            bodyCenterX + math.cos(phi) * reach * .18,
+            py + 1 + math.sin(phi) * (ry - 1) * .18,
+            bodyCenterX + math.cos(phi) * reach,
+            py + 1 + math.sin(phi) * (ry - 1) + lift,
+            veinColor,
+            .28,
+            slit,
+          );
+        }
+      }
+      if (scaleRatio > 0.5 && angleGap(math.pi) > .6) {
+        _rect(
+          c,
+          bodyCenterX - bodyRx + 7 * scaleRatio,
+          py + 1.5 * scaleRatio,
+          7 * scaleRatio,
+          1,
+          0xff94c195,
+          .65,
+        );
+      }
     }
 
     // 6. Edge-Fold Deformation & Water-Wash Tongue (Zone C Edge Landing)
@@ -821,13 +1020,125 @@ class PondRenderer {
     // 8. Companion floating water lotus bloom beside pad 0 or lotus-bearing ambient pads
     if (pad.index == 0 || pad.hasLotus) {
       final bScale = pad.isAmbient ? (scaleRatio * 1.15).clamp(0.55, 0.95) : 1.0;
-      final lx = px - rx - 8 * bScale + math.sin(t * .5) * 1.2 * motion;
-      final ly = py + 4 * bScale + pad.dipY * .35;
+      final orbit = math.pi + pad.yaw;
+      final lx =
+          px + math.cos(orbit) * (rx + 8 * bScale) + math.sin(t * .5) * 1.2 * motion;
+      final ly =
+          py + 4 * bScale + math.sin(orbit) * (ry + 2 * bScale) + pad.dipY * .35;
       _oval(c, lx, ly + 2 * bScale, 8 * bScale, 3 * bScale, 0xff1f5750, .85);
       _oval(c, lx - 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
       _oval(c, lx + 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
       _oval(c, lx, ly - 1 * bScale, 4 * bScale, 3 * bScale, 0xfffad2e1, .95);
       _rect(c, lx - 1, ly - 1, 2, 2, 0xffffd966, .95);
+    }
+  }
+
+  /// Body of a Victoria-style super pad: a flat floor inside an upturned rim.
+  /// The rim top is the floor ellipse raised by [h]; its outer wall shows as
+  /// a plum crescent on the near side and its inner wall as a dark crescent on
+  /// the far side. The floor is the lens of the floor ellipse and the rim's
+  /// inner ellipse, so the near rim hides the floor behind it. The slit cuts
+  /// through rim and floor alike, a notch that turns with the pad.
+  void _superPadBody(
+    ui.Canvas c,
+    PadState pad,
+    double px,
+    double py,
+    double rx,
+    double ry,
+    double scaleRatio,
+    double depth,
+    _Slit slit,
+    double theta,
+    int Function(int) hazed,
+    double Function(double) angleGap,
+  ) {
+    final sr = scaleRatio.clamp(.6, 1.15);
+    final h = (1.6 + 1.6 * depth) * sr;
+    final wallT = 2.4 * sr;
+    final aspect = ry / rx;
+    final floorRx = math.max(3.0, rx - wallT);
+    final floorRy = math.max(1.5, ry - wallT * aspect);
+    final wall = hazed(0xff7a3d52);
+    final lip = hazed(0xffa0c66f);
+    final rimTop = hazed(0xff6faa64);
+    final innerWall = hazed(0xff1d5247);
+    final floor = hazed(0xff4f9a6e);
+    final floorLight = hazed(0xff69b07a);
+    final rib = hazed(0xff2f6b55);
+
+    _ovalCut(c, px, py, rx, ry, wall, 1, slit);
+    _ovalCut(c, px, py - h, rx, ry, rimTop, 1, slit);
+    _ovalCut(c, px, py - h, floorRx, floorRy, innerWall, 1, slit);
+    _ovalCut(c, px, py, floorRx, floorRy, floor, 1, slit, lens: h);
+    if (floorRx > 8) {
+      _ovalCut(
+        c,
+        px - 2 * sr,
+        py - sr,
+        floorRx - 3 * sr,
+        math.max(1.0, floorRy - 1.5 * sr),
+        floorLight,
+        1,
+        slit,
+        lens: h - sr,
+      );
+    }
+
+    // Prominent radial ribs, shortened on the near half so they stop at the
+    // rim instead of running onto it.
+    const ribs = 12;
+    for (var k = 0; k < ribs; k++) {
+      final phi = theta + (k + .5) * math.pi * 2 / ribs;
+      final sinP = math.sin(phi);
+      final fullY = sinP * floorRy * .94;
+      // Shorten the whole rib, not just its y, so it keeps its direction and
+      // never sweeps into the slit.
+      final f = sinP > 0 && fullY > 0
+          ? (math.max(0.0, fullY - h - 1) / fullY)
+          : 1.0;
+      final reachY = fullY * f;
+      final reachX = math.cos(phi) * floorRx * .94 * f;
+      _lineCut(
+        c,
+        px + reachX * .14,
+        py + reachY * .14,
+        px + reachX,
+        py + reachY,
+        rib,
+        .4,
+        slit,
+      );
+    }
+
+    // Sunlit lip along the far half of the rim and a shadow line under the
+    // near wall, both skipping the notch.
+    final steps = math.max(12, (rx * 1.2).round());
+    for (var i = 0; i <= steps; i++) {
+      final phi = math.pi + i / steps * math.pi;
+      if (angleGap(phi) < slit.halfAngle + .08) continue;
+      _rect(
+        c,
+        px + math.cos(phi) * (rx - .5),
+        py - h + math.sin(phi) * ry,
+        1,
+        1,
+        lip,
+        .85,
+      );
+    }
+    for (var i = 0; i <= steps; i++) {
+      final phi = i / steps * math.pi;
+      if (angleGap(phi) < slit.halfAngle + .08) continue;
+      _rect(
+        c,
+        px + math.cos(phi) * (rx - .5),
+        py + math.sin(phi) * ry,
+        1,
+        1,
+        0xff3a1a2c,
+        .6,
+      );
     }
   }
 
@@ -878,40 +1189,9 @@ class PondRenderer {
         _oval(c, sideX, sy, 3, 2, color, pulse * (.14 + m.richness * .18));
         _rect(c, sideX, sy, 1, 1, 0xffffffff, pulse * (.45 + night * .35));
       }
-    } else if (m.biome == 'maple' ||
-        m.biome == 'autumn_mist' ||
-        m.biome == 'blossom' ||
-        m.biome == 'lotus') {
-      final isMaple = m.biome == 'maple' || m.biome == 'autumn_mist';
-      for (var i = 0; i < 16; i++) {
-        final d = _details[170 + i];
-        final driftX =
-            (d.x * _width +
-                (reducedMotion
-                    ? 0
-                    : m.time * (isMaple ? 3.5 : 5.2) +
-                          math.sin(m.time * .7 + i) * 8)) %
-            _width;
-        final driftY = 185 + d.y * 155 + math.cos(m.time * .9 + i) * 2 * motion;
-        final color = isMaple
-            ? (i % 3 == 0
-                  ? 0xffe2523a
-                  : i % 3 == 1
-                  ? 0xfff08c3b
-                  : 0xffe6b84c)
-            : (i.isEven ? 0xfff7bfd4 : 0xffffdfe9);
-        _rect(c, driftX, driftY, isMaple ? 4 : 3, 2, color, .55 + d.z * .3);
-        _rect(c, driftX + 1, driftY - 1, 2, 1, color, .4);
-      }
-    } else if (m.biome == 'cypress' || m.biome == 'firefly') {
-      for (var i = 0; i < 14; i++) {
-        final d = _details[185 + i];
-        final x = i.isEven ? 20 + d.x * 150 : _width - 20 - d.x * 150;
-        final len = 14 + d.z * 26;
-        final sway = math.sin(m.time * .55 + i) * 2.5 * motion;
-        _line(c, x, 4 + d.y * 28, x + sway, 4 + d.y * 28 + len, 0xff5a7a6e, .5);
-      }
     }
+    // Drifting petals, maple leaves and Spanish moss moved to the layer
+    // stack (`scene_layers.dart`): canopy generators and particle emitters.
   }
 
   void _foliage(ui.Canvas c, PondModel m, double motion, bool hasImage) {
@@ -974,9 +1254,137 @@ class PondRenderer {
     final y = b.y * _height;
     final wing = reducedMotion ? 1.0 : math.sin(b.phase * 3).abs() * 2 + 1;
     final a = b.opacity;
-    if (b.species == 'firefly') {
-      _oval(c, x, y, 6, 6, 0xffe5e9a0, a * .09);
+    final night = (1 - m.daylight).clamp(0.0, 1.0);
+    // Signature species (design D2): procedural pixel sprites in the same
+    // 5–9 px idiom as the originals; every one is catchable.
+    if (b.species == 'waterstrider') {
+      // Four splayed legs dimpling the surface, a thin dark body, and a faint
+      // highlight where each foot bends the water.
+      final stride = reducedMotion ? 0.0 : math.sin(b.phase * 2) * .6;
+      _rect(c, x - 1, y, 3, 1, 0xff2b3a3a, a);
+      _line(c, x - 1, y, x - 4 - stride, y - 2, 0xff3a4a48, a * .85);
+      _line(c, x + 1, y, x + 4 + stride, y - 2, 0xff3a4a48, a * .85);
+      _line(c, x - 1, y, x - 4 + stride, y + 2, 0xff3a4a48, a * .85);
+      _line(c, x + 1, y, x + 4 - stride, y + 2, 0xff3a4a48, a * .85);
+      _rect(c, x - 5, y + 2, 1, 1, 0xffdcf2f0, a * .35);
+      _rect(c, x + 4, y + 2, 1, 1, 0xffdcf2f0, a * .35);
+    } else if (b.species == 'whirligig') {
+      // A glossy black bead spinning on dark water with a bronze glint.
+      _oval(c, x, y, 2, 1.5, 0xff141c22, a);
+      _rect(c, x - 1, y - 1, 1, 1, 0xff9a7a4a, a * .9);
+      final sheen = reducedMotion ? 0.0 : math.cos(b.phase) * 1.5;
+      _rect(c, x + sheen, y + 1, 1, 1, 0xffcfe8ec, a * .3);
+      _rect(c, x - 3, y + 1, 7, 1, 0xffdcf2f0, a * .12);
+    } else if (b.species == 'damselfly') {
+      // Needle body held level, paired wings folded then flicked; electric
+      // blue or emerald by variant.
+      final body = b.variant == 0 ? 0xff4fa8e8 : 0xff5fc89a;
+      _rect(c, x - 4, y, 9, 1, body, a);
+      _rect(c, x - 4, y, 1, 1, 0xff1f2a3a, a);
+      _rect(c, x + 4, y, 1, 1, 0xff1f2a3a, a * .8);
+      _rect(c, x - 1, y - wing, 3, wing.ceil().toDouble(), 0xffe3f1f4, a * .55);
+      _rect(c, x - 1, y - 1, 1, 1, 0xff1f2a3a, a);
+    } else if (b.species == 'bee') {
+      // Amber-and-black striped abdomen under a wing blur.
+      _oval(c, x, y, 2, 1.5, 0xffe0a83a, a);
+      _rect(c, x - 1, y - 1, 1, 3, 0xff2a2218, a);
+      _rect(c, x + 1, y - 1, 1, 3, 0xff2a2218, a);
+      _rect(c, x - 3, y, 1, 1, 0xff2a2218, a);
+      _rect(c, x - 1, y - wing - 1, 3, 1, 0xffeef5f2, a * .6);
+      _rect(c, x + 2, y - 1, 1, 1, 0xffeef5f2, a * .45);
+    } else if (b.species == 'cicada') {
+      // Stout olive body, wide clear wings laid back along it.
+      _rect(c, x - 2, y - 1, 5, 2, 0xff6b7a3c, a);
+      _rect(c, x - 3, y - 1, 1, 2, 0xff2f3a2a, a);
+      _rect(c, x - 2, y + 1, 6, 1, 0xffd6e2d2, a * .55);
+      _rect(c, x - 1, y - wing - 1, 5, 1, 0xffd6e2d2, a * .5);
+      _rect(c, x - 3, y - 2, 1, 1, 0xffe5894a, a);
+    } else if (b.species == 'cricket') {
+      // Dark brown hopper with long antennae and a bent hind leg.
+      _rect(c, x - 2, y, 4, 2, 0xff4a3222, a);
+      _rect(c, x - 3, y, 1, 1, 0xff2a1c14, a);
+      _line(c, x - 3, y, x - 5, y - 3, 0xff6b4e38, a * .7);
+      _line(c, x - 3, y, x - 6, y - 1, 0xff6b4e38, a * .7);
+      _rect(c, x + 1, y - 1, 1, 1, 0xff6b4e38, a);
+      _rect(c, x + 2, y, 1, 2, 0xff6b4e38, a);
+    } else if (b.species == 'katydid') {
+      // Leaf-green wings folded upright over the body, antennae forward.
+      final lift = reducedMotion ? 0.0 : math.sin(b.phase * 3).abs() * 1.5;
+      _rect(c, x - 2, y - 2 - lift, 5, 1, 0xffa9d882, a * .9);
+      _rect(c, x - 2, y - 1, 5, 2, 0xff7fbc5a, a);
+      _rect(c, x - 3, y, 1, 1, 0xff3f5e32, a);
+      _line(c, x - 3, y - 1, x - 6, y - 3, 0xff8fb66e, a * .6);
+      _rect(c, x + 1, y + 1, 1, 1, 0xff3f5e32, a);
+    } else if (b.species == 'cranefly') {
+      // Gangly: a thread of body on dangling legs, two slow wings.
+      _rect(c, x - 1, y - 1, 3, 1, 0xff9a8f7a, a);
+      _rect(c, x - 2, y - wing, 2, 1, 0xffe9ecdf, a * .5);
+      _rect(c, x + 1, y - wing, 2, 1, 0xffe9ecdf, a * .5);
+      _line(c, x - 1, y, x - 3, y + 4, 0xff7a7060, a * .55);
+      _line(c, x, y, x, y + 4, 0xff7a7060, a * .55);
+      _line(c, x + 1, y, x + 3, y + 4, 0xff7a7060, a * .55);
+    } else if (b.species == 'stonefly') {
+      // Slate body, wings flat along the back, two tail filaments.
+      _rect(c, x - 3, y, 6, 1, 0xff4a5560, a);
+      _rect(c, x - 2, y - 1, 5, 1, 0xffb9c6cc, a * .55);
+      _rect(c, x - 3, y, 1, 1, 0xff202830, a);
+      _line(c, x + 3, y, x + 5, y + 1, 0xff8a97a0, a * .6);
+      _line(c, x + 3, y, x + 5, y - 1, 0xff8a97a0, a * .6);
+    } else if (b.species == 'cavecricket') {
+      // Pale humpbacked hopper with very long antennae; no eyes to speak of.
+      _oval(c, x, y, 2, 1.5, 0xffc9b89a, a);
+      _rect(c, x - 3, y, 1, 1, 0xffa08f74, a);
+      _line(c, x - 3, y, x - 7, y - 3, 0xffd8ccb4, a * .55);
+      _line(c, x - 3, y, x - 7, y - 1, 0xffd8ccb4, a * .55);
+      _rect(c, x + 2, y - 1, 1, 1, 0xffa08f74, a);
+      _rect(c, x + 2, y + 1, 1, 1, 0xffa08f74, a);
+    } else if (b.species == 'jewelbeetle') {
+      // Metallic jade carapace with a travelling glint.
+      _oval(c, x, y, 2.5, 2, 0xff2f8f6a, a);
+      _rect(c, x - 1, y - 1, 3, 1, 0xff6fd9a8, a * .9);
+      _rect(c, x, y - 2, 1, 1, 0xff1d4a3a, a);
+      final glint = reducedMotion ? 0.0 : (math.sin(b.phase * .7) * 1.5);
+      _rect(c, x + glint, y, 1, 1, 0xffe9fff2, a * .8);
+      _rect(c, x - 1, y - wing - 1, 3, 1, 0xffb8f0d6, a * .3);
+    } else if (b.species == 'fungusgnat') {
+      // A speck with a faint cyan halo borrowed from the fungi it hangs over.
+      _oval(c, x, y, 3, 3, 0xff7fe9e4, a * (.05 + .07 * night));
+      _rect(c, x, y, 1, 1, 0xff22303a, a);
+      _rect(c, x - 1, y - 1, 1, 1, 0xffbdf4f0, a * (.35 + .35 * night));
+      _rect(c, x + 1, y - wing + 1, 1, 1, 0xffbdf4f0, a * .3);
+    } else if (b.species == 'firefly') {
+      // Glow widens at night so the lantern-yellow point reads on the grade.
+      _oval(c, x, y, 6, 6, 0xffe5e9a0, a * (.09 + .10 * night));
+      _oval(c, x, y, 3, 3, 0xfffff2b8, a * .18 * night);
       _rect(c, x, y, 2, 2, 0xffffeaa6, a);
+    } else if (b.species == 'glowbeetle') {
+      // Cyan or violet abdomen pulsing under a dark carapace.
+      final glow = b.variant == 0 ? 0xff5ef2e8 : 0xffc68cff;
+      final pulse = reducedMotion ? .8 : .6 + .4 * math.sin(b.phase * 1.3);
+      _oval(c, x, y, 5, 4, glow, a * (.10 + .20 * night) * pulse);
+      _oval(c, x, y - 1, 2, 2, 0xff1c2a33, a);
+      _rect(c, x - 1, y, 3, 1, glow, a * pulse);
+      _rect(c, x, y, 1, 1, 0xffffffff, a * pulse * .8);
+      _rect(c, x - 2, y - 2, 1, 1, 0xff1c2a33, a);
+      _rect(c, x + 1, y - 2, 1, 1, 0xff1c2a33, a);
+    } else if (b.species == 'moth') {
+      // Dusty pale wings with a dark spot; thicker body than a butterfly.
+      _oval(c, x - 2, y, wing + 1, 2, 0xffe8dcc4, a * .9);
+      _oval(c, x + 2, y, wing + 1, 2, 0xffe8dcc4, a * .9);
+      if (wing > 2) {
+        _rect(c, x - 3, y, 1, 1, 0xffa58d6c, a * .8);
+        _rect(c, x + 2, y, 1, 1, 0xffa58d6c, a * .8);
+      }
+      _rect(c, x, y - 1, 1, 3, 0xffb7a58a, a);
+      _rect(c, x, y - 2, 1, 1, 0xff5a4a3c, a);
+    } else if (b.species == 'mayfly') {
+      // Slender upright body, one translucent sail wing, two tail filaments.
+      final flick = reducedMotion ? .6 : .35 + .45 * math.sin(b.phase * 2).abs();
+      _rect(c, x, y - 4, 1, 3, 0xffeaf6f2, a * flick);
+      _rect(c, x, y - 1, 1, 4, 0xffd8e2c8, a);
+      _rect(c, x, y - 1, 1, 1, 0xff4d5b4b, a);
+      _line(c, x, y + 3, x - 2, y + 6, 0xffb9c7b7, a * .5);
+      _line(c, x, y + 3, x + 1, y + 6, 0xffb9c7b7, a * .5);
     } else if (b.species == 'ladybug') {
       _oval(c, x, y, 3, 3, 0xff293c46, a);
       _oval(c, x, y - 1, 2, 2, 0xffe78b69, a);
@@ -1022,8 +1430,12 @@ class PondRenderer {
         );
       }
     }
-    final rain = m.weather == 'drizzle' || m.weather == 'storm';
-    if (m.weather == 'mist' || m.weather == 'storm' || m.biome == 'autumn_mist') {
+    final rain = m.raining;
+    final intensity = m.rainIntensity;
+    // Heavy rain brings its own low fog, fading in above intensity 0.5.
+    final heavyFog = ((intensity - .5) / .5).clamp(0.0, 1.0);
+    final mistFog = m.weather == 'mist' || m.biome == 'autumn_mist';
+    if (mistFog || heavyFog > 0) {
       for (var i = 0; i < 9; i++) {
         final d = _details[70 + i];
         final x = -70 + d.x * 380 + math.sin(m.time * .035 + i) * 24 * motion;
@@ -1034,13 +1446,19 @@ class PondRenderer {
           240 + d.z * 180,
           3 + d.w * 6,
           0xffb7cdd0,
-          m.weather == 'mist' || m.biome == 'autumn_mist' ? .055 : .035,
+          // Mist bands follow the fog's density: thicker toward night.
+          m.weather == 'mist'
+              ? .03 + .05 * m.mistDensity
+              : mistFog
+              ? .055
+              : .035 * heavyFog,
         );
       }
     }
     if (rain) {
       if (!reducedMotion && m.raindrops.isNotEmpty) {
         final windDx = m.wind * 2.4;
+        final streakAlpha = .22 + .16 * intensity;
         for (final drop in m.raindrops) {
           if (drop.y < -8) continue;
           final endY = math.min(drop.y, drop.targetY);
@@ -1053,9 +1471,27 @@ class PondRenderer {
             drop.x,
             endY,
             0xffc6e4e8,
-            .32,
+            streakAlpha,
           );
           _rect(c, drop.x, endY, 1, 1, 0xffe8fafc, .52);
+        }
+        // Downpour sheets above 0.7 are visual only: no impacts, no ripples.
+        final sheet = ((intensity - .7) / .3).clamp(0.0, 1.0);
+        final extra = (sheet * 30).round();
+        for (var i = 0; i < extra; i++) {
+          final d = _details[40 + i];
+          final y = (d.y * _height + m.time * (250 + d.z * 90)) % _height;
+          final x = (d.x * _width + m.wind * y * .1) % _width;
+          final length = 9 + d.w * 7;
+          _line(
+            c,
+            x - windDx,
+            y - length,
+            x,
+            y,
+            0xffc6e4e8,
+            .14 + .14 * sheet,
+          );
         }
       } else {
         for (var i = 0; i < 16; i++) {
@@ -1084,6 +1520,7 @@ class PondRenderer {
 
   /// Releases only procedural caches, never the externally owned images.
   void dispose() {
+    layers.dispose();
     _scenery?.dispose();
     _scenery = null;
     _details = const [];
@@ -1095,4 +1532,96 @@ class PondRenderer {
 class _Mote {
   const _Mote(this.x, this.y, this.z, this.w);
   final double x, y, z, w;
+}
+
+/// A lily pad's radial V-slit projected to the screen. The pad is a near
+/// circle in its own plane; a pad-plane angle `θ` maps to the screen offset
+/// `(cos θ · rx, sin θ · ry)`, and the affine map keeps rays straight, so the
+/// slit stays a wedge between two rays from the centre. A small disc at the
+/// centre, where the lobes join at the stem, is never cut.
+class _Slit {
+  _Slit(
+    this.cx,
+    this.cy,
+    double theta,
+    this.halfAngle,
+    double rx,
+    double ry,
+    double inner,
+  ) : r1x = math.cos(theta - halfAngle) * rx,
+      r1y = math.sin(theta - halfAngle) * ry,
+      r2x = math.cos(theta + halfAngle) * rx,
+      r2y = math.sin(theta + halfAngle) * ry,
+      innerRx = rx * inner,
+      innerRy = math.max(.5, ry * inner) {
+    sign = (r1x * r2y - r1y * r2x) >= 0 ? 1.0 : -1.0;
+  }
+
+  final double cx, cy;
+  final double halfAngle;
+  final double r1x, r1y, r2x, r2y;
+  final double innerRx, innerRy;
+  late final double sign;
+
+  /// Whether the pixel at ([px], [py]) lies in the wedge outside the stem
+  /// disc, for lines that must not paint over the gap.
+  bool contains(double px, double py) {
+    final dx = px + .5 - cx;
+    final dy = py + .5 - cy;
+    if (sign * (r1x * dy - r1y * dx) < 0) return false;
+    if (sign * (dx * r2y - dy * r2x) < 0) return false;
+    final u = dx / innerRx;
+    final v = dy / innerRy;
+    return u * u + v * v >= 1;
+  }
+
+  /// Writes up to two `[lo, hi)` column gaps on pixel row [rowY] within
+  /// `[left, right)` into [out] (lo0, hi0, lo1, hi1) and returns how many.
+  int gapsOnRow(double rowY, double left, double right, List<double> out) {
+    final dy = rowY + .5 - cy;
+    var lo = double.negativeInfinity;
+    var hi = double.infinity;
+    // Inside the wedge: cross(r1, p) and cross(p, r2) share the wedge's sign.
+    for (var i = 0; i < 2; i++) {
+      final c = i == 0 ? -sign * r1y : sign * r2y;
+      final k = i == 0 ? sign * r1x * dy : -sign * dy * r2x;
+      if (c.abs() < 1e-9) {
+        if (k < 0) return 0;
+        continue;
+      }
+      final bound = -k / c;
+      if (c > 0) {
+        lo = math.max(lo, bound);
+      } else {
+        hi = math.min(hi, bound);
+      }
+    }
+    lo = math.max(lo, left - cx);
+    hi = math.min(hi, right - cx);
+    if (hi <= lo) return 0;
+    // Leave the stem disc whole: subtract its half-width on this row.
+    final innerHalf = dy.abs() < innerRy
+        ? innerRx * math.sqrt(math.max(0, 1 - dy * dy / (innerRy * innerRy)))
+        : 0.0;
+    var n = 0;
+    void emit(double a, double b) {
+      if (b <= a) return;
+      // The pixel under the wedge's centreline is always part of the gap, so
+      // a slit thinner than a pixel still reads as one unbroken cut.
+      final mid = (cx + (a + b) / 2).floorToDouble();
+      final colLo = math.min((cx + a).roundToDouble(), mid);
+      final colHi = math.max((cx + b).roundToDouble(), mid + 1);
+      if (colLo >= right || colHi <= left) return;
+      out[n * 2] = math.max(left, colLo);
+      out[n * 2 + 1] = math.min(right, colHi);
+      n++;
+    }
+    if (innerHalf <= 0) {
+      emit(lo, hi);
+    } else {
+      emit(lo, math.min(hi, -innerHalf));
+      emit(math.max(lo, innerHalf), hi);
+    }
+    return n;
+  }
 }

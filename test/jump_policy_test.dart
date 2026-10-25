@@ -43,10 +43,10 @@ void main() {
     () {
       for (final x in <List<double>>[
         [],
-        List.filled(7, 0),
-        List.filled(9, 0),
-        [double.nan, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, double.infinity, 0, 0, 0],
+        List.filled(11, 0),
+        List.filled(13, 0),
+        [double.nan, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, double.infinity, 0, 0, 0, 0, 0, 0, 0],
       ]) {
         expect(JumpPolicy.scores(x), [0, 1, 0]);
         expect(JumpPolicy.choose(x), 'low');
@@ -61,10 +61,14 @@ void main() {
           bugVy: 0,
           energy: 1,
           wind: 0,
+          targetX: .3,
+          targetY: .8,
+          scaleFrom: .8,
+          scaleTo: .9,
         ),
         'low',
       );
-      final p = JumpPolicy.scores(List.filled(8, double.maxFinite));
+      final p = JumpPolicy.scores(List.filled(JumpPolicy.inputs, double.maxFinite));
       expect(p.every((x) => x.isFinite && x >= 0 && x <= 1), isTrue);
       expect(p.reduce((a, b) => a + b), closeTo(1, 1e-12));
     },
@@ -81,6 +85,10 @@ void main() {
         bugVy: -.04,
         energy: .75,
         wind: -.5,
+        targetX: .4,
+        targetY: .6,
+        scaleFrom: .9,
+        scaleTo: .675,
       ),
       everyElement(isA<double>()),
     );
@@ -93,9 +101,16 @@ void main() {
       bugVy: -.04,
       energy: .75,
       wind: -.5,
+      targetX: .4,
+      targetY: .6,
+      scaleFrom: .9,
+      scaleTo: .675,
     );
-    const expected = [.5, .5, -.5, .5, .5, -.5, .5, -.5];
-    for (var i = 0; i < 8; i++) {
+    const expected = [
+      .5, 0, -.5, .5, .5, -.5, .5, -.5, -.5, -.5, .4, -.5, //
+    ];
+    expect(x, hasLength(JumpPolicy.inputs));
+    for (var i = 0; i < JumpPolicy.inputs; i++) {
       expect(x[i], closeTo(expected[i], 1e-12));
     }
   });

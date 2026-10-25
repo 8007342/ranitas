@@ -7,8 +7,12 @@
     "deploy": "npm run build && wrangler deploy",
     "deploy:pages": "npm run build && wrangler pages deploy build/web --project-name ranitas",
     "check:assets": "node scripts/check-assets.mjs",
+    "test:ambience": "node --test scripts/ambience.test.mjs",
     "art:build": "node scripts/prepare-art.mjs && node scripts/make-icon.mjs",
-    "train:policy": "node scripts/train-policy.mjs"
+    "art:emissive": "node scripts/make-emissive.mjs && node scripts/complete-emissive.mjs && node scripts/prepare-art.mjs",
+    "train:policy": "node scripts/train-policy.mjs",
+    "art:cycles": "flutter test tool/export_cycle_maps.dart",
+    "check:art": "node scripts/check-painted-art.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.5",
