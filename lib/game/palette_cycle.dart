@@ -92,6 +92,33 @@ class IndexMaps {
     return map;
   };
 
+  /// Sparse horizontal glints, as sun or moon light on far water or a fog
+  /// sheen: a fraction [density] of pixels start a dash of 2–[maxLength]
+  /// pixels whose slots run along it, so cycling the ramp makes each glint
+  /// flash and travel. Everything else stays transparent, so the painted
+  /// water shows through.
+  static IndexMapGenerator glints({double density = .05, int maxLength = 5}) =>
+      (width, height, slots, seed) {
+        final map = Uint8List(width * height);
+        for (var y = 0; y < height; y++) {
+          var x = 0;
+          while (x < width) {
+            if (_hash(seed, x, y) < density) {
+              final len = 2 + (_hash(seed, x + 1, y) * (maxLength - 1)).floor();
+              final base = (_hash(seed, x + 2, y) * slots).floor();
+              for (var i = 0; i < len && x + i < width; i++) {
+                final slot = (base + i * 2 ~/ len) % slots;
+                map[y * width + x + i] = 1 + slot;
+              }
+              x += len + 1;
+            } else {
+              x++;
+            }
+          }
+        }
+        return map;
+      };
+
   /// Decodes a painted grayscale map (`cycle-<backdrop>-<region>.webp`, full
   /// logical frame) into slots for [rect]: `slot = round(gray / 16)`.
   static Future<Uint8List?> fromPainted(
@@ -183,7 +210,9 @@ class PaletteCycle {
 
   int frameIndex(double t, {bool reducedMotion = false}) {
     if (reducedMotion || frameCount == 0) return 0;
-    final index = (t * spec.fps).floor() % frameCount;
+    // A small epsilon so `t + period` lands on the same frame despite
+    // floating-point rounding at frame boundaries.
+    final index = (t * spec.fps + 1e-7).floor() % frameCount;
     return index < 0 ? index + frameCount : index;
   }
 
@@ -356,6 +385,72 @@ class PaletteCycles {
     return (a << 24) | (rgb & 0xffffff);
   });
 
+  /// A sharper ramp for glints: one bright slot, two dim shoulders, rest off.
+  static List<int> _flash(int rgb, double peak) => List.generate(8, (k) {
+    const curve = [1.0, .55, .18, 0, 0, 0, .18, .55];
+    return ((curve[k] * peak * 255).round() << 24) | (rgb & 0xffffff);
+  });
+
+  /// A painted star: a tiny additive halo that twinkles (slow, blended).
+  static CycleSpec _star(
+    String id,
+    double cx,
+    double cy, {
+    double r = 10,
+    double peak = .5,
+    double fps = 1.6,
+    int seed = 1,
+    int rgb = 0xfff4e0,
+  }) => CycleSpec(
+    id: id,
+    rect: ui.Rect.fromLTWH(cx - r, cy - r, r * 2, r * 2),
+    ramp: _glow(rgb, peak),
+    generator: IndexMaps.radialPulse(rings: 1),
+    fps: fps,
+    emissive: true,
+    additive: true,
+    seed: seed,
+  );
+
+  /// A glowing mushroom cluster: an additive radial pulse over the caps.
+  static CycleSpec _cap(
+    String id,
+    ui.Rect rect,
+    int rgb, {
+    double peak = .3,
+    double fps = 2.3,
+    int seed = 1,
+  }) => CycleSpec(
+    id: id,
+    rect: rect,
+    ramp: _glow(rgb, peak),
+    generator: IndexMaps.radialPulse(),
+    fps: fps,
+    emissive: true,
+    additive: true,
+    seed: seed,
+  );
+
+  /// Sun, moon or fog light glinting on far water: sparse, additive, graded
+  /// with the scene (it is reflected sky light, not a source).
+  static CycleSpec _glitter(
+    String id,
+    ui.Rect rect,
+    int rgb, {
+    double peak = .4,
+    double density = .04,
+    double fps = 3,
+    int seed = 1,
+  }) => CycleSpec(
+    id: id,
+    rect: rect,
+    ramp: _flash(rgb, peak),
+    generator: IndexMaps.glints(density: density),
+    fps: fps,
+    additive: true,
+    seed: seed,
+  );
+
   static List<CycleSpec> specsFor(String backdropAsset) {
     final stem = OptionalAssets.backdropStem(backdropAsset);
     switch (stem) {
@@ -363,6 +458,16 @@ class PaletteCycles {
       case 'pond-lotus':
         final lotus = stem == 'pond-lotus';
         return [
+          // Evening star at (253, 65) and a fainter one at (350, 62).
+          _star('star', 253, 65, seed: 14),
+          _star('star-faint', 350, 62, r: 6, peak: .3, fps: 1.1, seed: 15),
+          // Sunset reflection band on the far water, x 140–520, y 176–198.
+          _glitter(
+            'glitter',
+            const ui.Rect.fromLTWH(140, 176, 380, 22),
+            lotus ? 0xffffe6c8 : 0xffffd8e0,
+            seed: 16,
+          ),
           CycleSpec(
             id: 'waterfall',
             rect: const ui.Rect.fromLTWH(381, 150, 6, 18),
@@ -398,10 +503,64 @@ class PaletteCycles {
             fps: 4,
             seed: 21,
           ),
+          // Evening star over the peaks at (408, 34).
+          _star('star', 408, 34, seed: 22),
+          // Alpenglow on the tarn's far reflection, x 200–440, y 192–236.
+          _glitter(
+            'glitter',
+            const ui.Rect.fromLTWH(200, 192, 240, 44),
+            0xffffe0d0,
+            density: .025,
+            fps: 2.5,
+            seed: 23,
+          ),
+        ];
+      case 'pond-dusk':
+      case 'pond-firefly':
+        final firefly = stem == 'pond-firefly';
+        return [
+          // Evening star at (435, 35).
+          _star('star', 435, 35, seed: 51),
+          // Sky reflection band on the far water, x 120–520, y 178–198.
+          _glitter(
+            'glitter',
+            const ui.Rect.fromLTWH(120, 178, 400, 20),
+            firefly ? 0xffbfe8ff : 0xffffd8e0,
+            density: .03,
+            seed: 52,
+          ),
+        ];
+      case 'pond-maple':
+      case 'pond-autumn-mist':
+        // Sunset reflection under the bridge, x 230–380, y 198–226.
+        return [
+          _glitter(
+            'glitter',
+            const ui.Rect.fromLTWH(230, 198, 150, 28),
+            0xfffff0c0,
+            density: .05,
+            seed: 61,
+          ),
+        ];
+      case 'pond-mist':
+        // Fog sheen on the far water, x 214–394, y 186–220.
+        return [
+          _glitter(
+            'sheen',
+            const ui.Rect.fromLTWH(214, 186, 180, 34),
+            0xffdff6ff,
+            peak: .3,
+            density: .025,
+            fps: 2,
+            seed: 71,
+          ),
         ];
       case 'pond-grotto':
       case 'pond-crystal-grotto':
         final crystal = stem == 'pond-crystal-grotto';
+        final cyan = crystal ? 0xf624eb : 0x1de5e7;
+        final violet = crystal ? 0xff6ad4 : 0xc68cff;
+        final amber = crystal ? 0xfd8f74 : 0xe2b66a;
         return [
           CycleSpec(
             id: 'seep',
@@ -432,6 +591,105 @@ class PaletteCycles {
             additive: true,
             seed: 33,
           ),
+          // Every other painted cap cluster (centres measured on the source):
+          // tall cyan (77,160), violet (23,176), amber (123,151), lilac
+          // (149,197), low cyan (164,233), ledge amber (214,216), shelf
+          // (505,111), right cyan (541,170), right violet (497,233), low
+          // right cyan (606,265). Each pulses at its own rate.
+          _cap(
+            'cap-tall',
+            const ui.Rect.fromLTWH(52, 136, 50, 48),
+            cyan,
+            seed: 34,
+            fps: 2.1,
+          ),
+          _cap(
+            'cap-violet',
+            const ui.Rect.fromLTWH(6, 160, 34, 32),
+            violet,
+            seed: 35,
+            fps: 2.6,
+          ),
+          _cap(
+            'cap-amber',
+            const ui.Rect.fromLTWH(106, 138, 34, 26),
+            amber,
+            seed: 36,
+            fps: 1.9,
+          ),
+          _cap(
+            'cap-lilac',
+            const ui.Rect.fromLTWH(126, 176, 46, 42),
+            violet,
+            seed: 37,
+            fps: 2.4,
+          ),
+          _cap(
+            'cap-low',
+            const ui.Rect.fromLTWH(148, 220, 32, 26),
+            cyan,
+            seed: 38,
+            fps: 2.8,
+          ),
+          _cap(
+            'cap-ledge',
+            const ui.Rect.fromLTWH(200, 204, 28, 24),
+            amber,
+            peak: .22,
+            seed: 39,
+            fps: 2,
+          ),
+          _cap(
+            'cap-shelf',
+            const ui.Rect.fromLTWH(484, 92, 42, 38),
+            amber,
+            seed: 40,
+            fps: 1.8,
+          ),
+          _cap(
+            'cap-right',
+            const ui.Rect.fromLTWH(516, 146, 50, 48),
+            cyan,
+            seed: 41,
+            fps: 2.3,
+          ),
+          _cap(
+            'cap-violet-right',
+            const ui.Rect.fromLTWH(480, 216, 34, 34),
+            violet,
+            seed: 42,
+            fps: 2.7,
+          ),
+          _cap(
+            'cap-low-right',
+            const ui.Rect.fromLTWH(590, 250, 32, 30),
+            cyan,
+            seed: 43,
+            fps: 2.5,
+          ),
+          // Crescent moon at (352, 136): a slow, faint halo.
+          _star(
+            'moon',
+            352,
+            136,
+            r: 16,
+            peak: .16,
+            fps: .5,
+            seed: 44,
+            rgb: 0xffe8f0ff,
+          ),
+          // Fungus and moon light shimmering on the water, x 200–440,
+          // y 236–300: sparse cyan glints that keep their light at night.
+          CycleSpec(
+            id: 'shimmer',
+            rect: const ui.Rect.fromLTWH(200, 236, 240, 64),
+            ramp: _flash(crystal ? 0xffe0b0ff : 0xffbffff8, .32),
+            generator: IndexMaps.glints(density: .03, maxLength: 6),
+            fps: 2.5,
+            emissive: true,
+            additive: true,
+            seed: 45,
+          ),
         ];
       case 'pond-sanctuary':
       case 'pond-jade-sanctuary':
@@ -449,6 +707,16 @@ class PaletteCycles {
             emissive: true,
             additive: true,
             seed: 41,
+          ),
+          // Mist sheen on the far water, x 262–512, y 188–218.
+          _glitter(
+            'sheen',
+            const ui.Rect.fromLTWH(262, 188, 250, 30),
+            jade ? 0xffd8fff0 : 0xffe8f8ff,
+            peak: .28,
+            density: .02,
+            fps: 2,
+            seed: 46,
           ),
         ];
       default:

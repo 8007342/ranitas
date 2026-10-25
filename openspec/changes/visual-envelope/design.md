@@ -108,6 +108,19 @@ crystal-grotto, sanctuary, jade-sanctuary, dusk and firefly; on the other six
 backdrops the key picks petals, sun glitter or dithered sky, so they stay on
 plain grading until painted masks arrive.
 
+*Revised 2026-10-25 (`work/pond-foliage`):* the first masks missed the main
+lights. The lantern window with its lit sill and every fungus cluster formed
+blobs above the 2600 px cap and were dropped, leaving only water glints and
+reflections. The script now classifies a blob as *coloured* when half its
+pixels pass the light-hue key, caps coloured blobs at 16 000 px (white blobs
+stay at 2600 px, which still drops snow and sky), and keys coloured pixels on
+a local contrast of 0.04 instead of 0.16 because a cap or window fills its own
+blur radius. The six masks were regenerated and checked: lantern, all fungi,
+moon and the painted fireflies and stars are lit. Light sources on the
+maskless backdrops (the evening stars on blossom, lotus, alpine, dusk and
+firefly; the grotto moon) are covered by additive emissive cycle regions
+instead (D4). Maple, autumn-mist and mist contain no painted light source.
+
 ### D4 Palette cycling as cached frames
 
 *Owner decision:* blend by material. Water and bioluminescence blend smoothly.
@@ -147,8 +160,43 @@ sources):
 
 Deviations: the alpine backdrop has no painted melt stream, so `stream` is the
 tarn's far-shore water line (dark teal row under the meadow) lapping sideways.
-pond-dusk, pond-mist, pond-firefly, pond-maple and pond-autumn-mist have no
-water feature or painted light source and declare no regions.
+
+**Added 2026-10-25 (owner: "good animation candidates", "glowy things at
+night").** Two new generators: `glints` (sparse 2–6 px dashes whose slots run
+along the dash, so each glint flashes and travels; everything else stays
+transparent) and the `_flash` ramp (one bright slot, two dim shoulders). Stars
+and caps are additive radial pulses marked emissive (ungraded); water glitter
+is additive but graded, because it is reflected sky light. Centres were
+measured on the 1376 × 768 sources and converted to logical units.
+
+| Backdrop | Region | Rect (x, y, w, h) | Generator | N / fps | Blend |
+| --- | --- | --- | --- | --- | --- |
+| pond-blossom, pond-lotus | `star` | 243, 55, 20, 20 | radial pulse, additive, emissive | 8 / 1.6 | yes |
+| pond-blossom, pond-lotus | `star-faint` | 344, 56, 12, 12 | radial pulse, additive, emissive | 8 / 1.1 | yes |
+| pond-blossom, pond-lotus | `glitter` | 140, 176, 380, 22 | glints, additive | 8 / 3 | yes |
+| pond-alpine | `star` | 398, 24, 20, 20 | radial pulse, additive, emissive | 8 / 1.6 | yes |
+| pond-alpine | `glitter` | 200, 192, 240, 44 | glints 0.025, additive | 8 / 2.5 | yes |
+| pond-dusk, pond-firefly | `star` | 425, 25, 20, 20 | radial pulse, additive, emissive | 8 / 1.6 | yes |
+| pond-dusk, pond-firefly | `glitter` | 120, 178, 400, 20 | glints 0.03, additive | 8 / 3 | yes |
+| pond-maple, pond-autumn-mist | `glitter` | 230, 198, 150, 28 | glints 0.05, additive | 8 / 3 | yes |
+| pond-mist | `sheen` | 214, 186, 180, 34 | glints 0.025, additive | 8 / 2 | yes |
+| pond-sanctuary, pond-jade-sanctuary | `sheen` | 262, 188, 250, 30 | glints 0.02, additive | 8 / 2 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-tall` | 52, 136, 50, 48 | radial pulse, additive, emissive (cyan) | 8 / 2.1 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-violet` | 6, 160, 34, 32 | radial pulse, additive, emissive (violet) | 8 / 2.6 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-amber` | 106, 138, 34, 26 | radial pulse, additive, emissive (amber) | 8 / 1.9 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-lilac` | 126, 176, 46, 42 | radial pulse, additive, emissive (violet) | 8 / 2.4 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-low` | 148, 220, 32, 26 | radial pulse, additive, emissive (cyan) | 8 / 2.8 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-ledge` | 200, 204, 28, 24 | radial pulse, additive, emissive (amber) | 8 / 2 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-shelf` | 484, 92, 42, 38 | radial pulse, additive, emissive (amber) | 8 / 1.8 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-right` | 516, 146, 50, 48 | radial pulse, additive, emissive (cyan) | 8 / 2.3 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-violet-right` | 480, 216, 34, 34 | radial pulse, additive, emissive (violet) | 8 / 2.7 | yes |
+| pond-grotto, pond-crystal-grotto | `cap-low-right` | 590, 250, 32, 30 | radial pulse, additive, emissive (cyan) | 8 / 2.5 | yes |
+| pond-grotto, pond-crystal-grotto | `moon` | 336, 120, 32, 32 | radial pulse, additive, emissive, faint | 8 / 0.5 | yes |
+| pond-grotto, pond-crystal-grotto | `shimmer` | 200, 236, 240, 64 | glints 0.03, additive, emissive | 8 / 2.5 | yes |
+
+Crystal-grotto swaps the cap hues (magenta, pink, coral) and the shimmer to
+lilac. Every backdrop now declares at least one region. The painted index-map
+override (`cycle-<backdrop>-<region>.webp`) applies to all of them.
 
 ### D5 Data-driven layer stack
 
@@ -176,6 +224,51 @@ the lean grows toward the tip without rebaking. Breathing parallax is
 `(richness − 0.12)·0.68` opacity, sway and modulate tint. `tintFor(model)` is
 the single tint helper for painted layers (`_shade` applies the same multiply
 to procedural colours) and is the merge point for `SceneGrade.filterFor`.
+
+**Foliage (added 2026-10-25, `lib/game/foliage.dart`).** Research is in
+`docs/visual-envelope.md` ("Foliage animation"). Every biome gets, through
+`FoliageSpec.forBiome`, a branch leaf kind and a bush leaf kind (willow
+blades, cherry or peach petal clusters, momiji, bamboo, pine needle tufts,
+moss sprigs, ferns, wisteria bits, broad bush leaves) with four-tone
+palettes.
+
+- *Atlas:* `LeafAtlas` is 8 × 4 cells of 16 px: row 0 large leaves, row 1
+  small, rows 2–3 their lit flip frames; columns 0–3 the branch leaf in four
+  shape/tone variants, 4–7 the bush leaf. `LeafAtlas.pixelsFor(spec)` is a
+  pure function of the spec (deterministic bytes, alpha 0 or 255) and
+  `bake` decodes it once per biome. A painted `foliage-<biome>.webp` at a
+  whole multiple of 128 × 64 (256 × 128 at 2×) replaces it.
+- *Branches:* 2–3 per side (`BranchChain`): one from the top corner reaching
+  ≈ 100–115 px inward, one hanging from the top edge at x 30–54, one from
+  the side edge at y 52–92. Chains have 4–5 segments shortening toward the
+  tip, 5–7 leaf packs of 4–6 leaves, the last pack at the tip. The lean of
+  segment k is `clamp(−(wind(t − lag_k)·0.55 + windTell·0.05)·windResponse·
+  (0.35 + 0.65·(k+1)/n) + ambient, ±0.36)`, with `lag_k = x_root/641·0.5 s +
+  0.07 s·k` read from a `WindTrace` ring buffer of the model's wind. Builder
+  invariant: `root + Σ lengths + max pack radius ≤ laneLeft − 34 − 2`, so the
+  central lane stays clear at any pose; the test checks the bound and seven
+  extreme poses. Bark is `drawLine` strokes (no AA, tapering, lit upper edge)
+  or cells of a painted `branches-<biome>.webp` strip (6 × 48 × 16 logical).
+  Leaves are one `drawRawAtlas` call: rotation = base + segment lean +
+  flutter (1.7 Hz large, 3.6 Hz small, amplitude `0.06 + 0.35·windy`),
+  quantised to 1/24 turn; the lit row shows when the flutter phase exceeds
+  0.93 in moving air.
+- *Bushes:* two near bushes per bottom corner (rx 42–56 and 24–32, ground at
+  y 352–356, 44/22 leaves) drawn after the corner foreground, and two mid
+  bushes per side on the far shore just outside the basin edge (scale 0.7,
+  14 small leaves) drawn after the mid bank. Bodies (two stacked scanline
+  ovals plus a crown row in the biome's bush tones) bake into one `Picture`
+  per slot and night bucket; the picture is sheared about y = 356 by the mean
+  bush shear, and each leaf carries its own bush's shear
+  (`clamp(wind_lagged·0.35 + tell·0.02 + ambient, ±0.3)`) times its height.
+  Grotto bushes add three additive glow-moss flecks each.
+- *Integration:* `SceneLayerPainter.foliage` draws after the declared layers
+  of the midBank, canopy and nearCorner slots for every biome, reveals on
+  `(richness − 0.2)/0.25`, takes the scene grade through the atlas paint's
+  `colorFilter`, breathes with the slot depth, and freezes (zero lean, shear,
+  flutter and flips) under reduced motion. `RanitasGame.onLoad` loads the two
+  optional images and awaits `foliage.prepare(biome)`; until the atlas exists
+  the slots draw nothing.
 
 Clear-lane rule: `CanopyGeometry` places side elements at least 34 px outside
 the central lane (x 160.25–480.75) and centre elements no deeper than 96 px,

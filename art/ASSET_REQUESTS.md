@@ -86,6 +86,48 @@ and right quarters.
 Bonus: `canopy-wisteria.png` (lavender wisteria racemes), usable in blossom and
 sanctuary.
 
+## 2b. Leaf atlases and branch strips (animated foliage)
+
+The game grows animated branches and bushes from a leaf-sprite atlas
+(`lib/game/foliage.dart`, design D5 "Foliage"). The procedural atlas is
+readable but generic; a hand-pixelled one per biome is the single most
+visible upgrade here.
+
+| File | Size | Grid |
+| --- | --- | --- |
+| `foliage-<biome>.png` | 256 × 128 | 8 columns × 4 rows of 32 × 32 px cells (16 × 16 logical at 2×) |
+| `branches-<biome>.png` | 576 × 32 | 6 cells of 96 × 32 px (48 × 16 logical at 2×) |
+
+**Atlas layout.** Columns 0–3 are the *branch leaf* in four shape or tone
+variants; columns 4–7 are the *bush leaf*. Row 0 holds large leaves, row 1
+small leaves (about 60 % size), row 2 the lit "flip" frame of row 0 and row 3
+the lit frame of row 1: the same leaf one tone lighter with a highlight
+pixel, shown for a few frames when the leaf turns in the wind. Centre each
+leaf in its cell; the game rotates cells about their centre by up to ±0.6 rad
+plus flutter. Hanging leaves (willow blades, moss, wisteria) should hang from
+the top-centre of the cell. Transparent background; alpha 0 or 255 only.
+
+| Biome | Branch leaf (cols 0–3) | Bush leaf (cols 4–7) |
+| --- | --- | --- |
+| willow | thin curved willow blades | broad dark-green leaves |
+| blossom | cherry blossom clusters | broad leaves |
+| lotus | peach blossom clusters | wisteria raceme bits |
+| cypress, firefly | Spanish moss sprigs | broad teal leaves |
+| maple, autumn_mist | momiji (five lobes) in crimson, orange, gold | broad ochre leaves |
+| sanctuary, jade_sanctuary | bamboo blades | bamboo blades |
+| grotto | fern fronds | fern fronds |
+| crystal_grotto | blue-lilac fern fronds | the same |
+| alpine | pine needle tufts | broad green leaves |
+
+**Branch strip.** Cells 0–4 are bark segments from root (thick, 3–4 px) to
+tip (1–2 px), painted horizontally from the cell's left-centre (0, 16) to its
+right-centre (96, 16), with small twig stubs welcome; cell 5 is a spare twig.
+The game rotates each cell onto a chain segment and stretches it to the
+segment's length (typically 15–30 logical px), so keep bark texture coarse.
+
+Bonus (not wired yet): `bushes-<biome>.png`, three bush silhouettes of
+96 × 48 px, to replace the procedural oval bodies under the leaves.
+
 ## 3. Mid-bank layers
 
 | File | Size | Notes |
@@ -113,12 +155,28 @@ corners only, central water lane fully open.
 
 `scripts/make-emissive.mjs` (`npm run art:emissive`) generates first-pass masks
 automatically for `pond-grotto`, `pond-crystal-grotto`, `pond-sanctuary`,
-`pond-jade-sanctuary`, `pond-dusk` and `pond-firefly`. The other six backdrops
-have no mask yet because the automatic key picks petals, sun glitter or dithered
-sky instead of lights (run the script with `--all --preview <dir>` to see why),
-so painted masks are most wanted for those. A painted mask replaces the
-generated one for a sharper result. Cover lanterns, glowing mushrooms, lit
-windows, the moon, stars and crystal glints.
+`pond-jade-sanctuary`, `pond-dusk` and `pond-firefly`. Regenerated on
+2026-10-25: the masks now cover the stone lantern window, every fungus cluster,
+the crescent moon, the painted fireflies and the evening star (the first pass
+had dropped the lantern and the fungi as oversized blobs). The other six
+backdrops have no mask because the automatic key picks petals, larch boughs,
+sun glitter or dithered sky instead of lights (run the script with
+`--all --preview <dir>` to see why), so painted masks are most wanted for
+those. A painted mask replaces the generated one for a sharper result. Cover
+lanterns, glowing mushrooms, lit windows, the moon, stars and crystal glints.
+
+What each backdrop actually contains, checked by eye on the sources:
+
+| Backdrop | Painted light sources | Covered today by |
+| --- | --- | --- |
+| `pond-grotto`, `pond-crystal-grotto` | 12 fungus clusters, crescent moon, stars, fungus reflections | regenerated mask + `cap-*`, `fungi*`, `moon`, `shimmer` cycle regions |
+| `pond-sanctuary`, `pond-jade-sanctuary` | stone lantern window | regenerated mask + `lantern` region |
+| `pond-dusk` | evening star | regenerated mask + `star` region |
+| `pond-firefly` | evening star, ~12 painted fireflies | regenerated mask + `star` region |
+| `pond-blossom`, `pond-lotus` | evening star and a faint second star | `star`, `star-faint` regions (no mask) |
+| `pond-alpine` | evening star | `star` region (no mask) |
+| `pond-maple`, `pond-autumn-mist` | none (the bridge is unlit) | nothing to glow; a painted mask could add lanterns on the bridge only if they are painted into the backdrop too |
+| `pond-mist` | none | nothing to glow |
 
 ## 6. Palette-cycle index maps (waterfalls, streams, glows)
 
@@ -137,14 +195,18 @@ the region. Wanted regions:
 | `pond-blossom` | `waterfall` | cliffside waterfall, falling |
 | `pond-alpine` | `stream` | melt stream into the tarn |
 | `pond-crystal-grotto` | `seep` | water seep down the rock wall |
-| `pond-grotto` | `fungi` | mushroom glow pulse (radial) |
+| `pond-grotto` | `fungi`, `cap-*` | mushroom glow pulses (radial, one per cluster) |
+| `pond-grotto` | `shimmer` | fungus and moon light on the water (sparse glints) |
 | `pond-sanctuary` | `lantern` | lantern flicker (radial) |
+| any with a star | `star` | twinkle (radial) |
+| any with a reflection band | `glitter`, `sheen` | sun, alpenglow or fog light on far water (sparse glints) |
 
 The regions wired in code, with their logical rectangles, are listed in the
 design (`openspec/changes/visual-envelope/design.md`, D4). `pond-lotus` shares
-the blossom waterfall regions, `pond-crystal-grotto` the grotto `seep`,
-`fungi` and `fungi-right`, and `pond-jade-sanctuary` the `lantern`; a painted
-map named for any of those backdrops and regions replaces the procedural one.
+the blossom regions, `pond-crystal-grotto` the grotto ones, `pond-firefly` the
+dusk ones, `pond-autumn-mist` the maple ones and `pond-jade-sanctuary` the
+sanctuary ones; a painted map named for any of those backdrops and regions
+replaces the procedural one.
 
 Until a painted map exists, procedural regions approximate these features.
 

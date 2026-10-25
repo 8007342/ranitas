@@ -22,6 +22,13 @@ class OptionalAssets {
   static String canopy(String biome) => 'canopy-${stem(biome)}.webp';
   static String midBank(String biome) => 'midbank-${stem(biome)}.webp';
   static String foreground(String biome) => 'foreground-${stem(biome)}.webp';
+
+  /// Leaf-sprite atlas (8 × 4 cells of 32 × 32 px) overriding the procedural
+  /// one in `foliage.dart`.
+  static String foliage(String biome) => 'foliage-${stem(biome)}.webp';
+
+  /// Branch segment strip (6 cells of 96 × 32 px, root to tip).
+  static String branches(String biome) => 'branches-${stem(biome)}.webp';
   static String emissive(String backdropAsset) =>
       'emissive-${backdropStem(backdropAsset)}.webp';
   static String cycleIndex(String backdropAsset, String region) =>

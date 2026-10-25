@@ -154,6 +154,16 @@ section):
 - **Emissive masks:** these were generated for 6 of the 12 backdrops (both
   grottos, both sanctuaries, firefly, willow). On the others the key caught
   petals, sun glitter or dithered sky, so those stay on plain grading.
+  *2026-10-25, foliage branch:* the first-pass masks missed the real lights.
+  The sanctuary mask held only water-line glints (the lantern window and its
+  lit sill formed one blob above the 2600 px cap) and the grotto masks held
+  the fungi *reflections* but not the caps. `make-emissive.mjs` now lets
+  coloured blobs grow to 16 000 px and keys coloured pixels on a lower local
+  contrast; the six masks were regenerated and checked by eye (lantern, every
+  fungus cluster, moon and fireflies are lit). The other six backdrops were
+  previewed again with the new rules and still key petals, larch boughs or
+  water, so they keep plain grading plus the new additive star and glitter
+  cycle regions.
 - **Alpine stream:** alpine has no painted stream, so its `stream` cycle
   animates the far-shore water line.
 - **Glow cycles:** the fungi and lantern cycles are additive halos, not pixel
@@ -170,6 +180,89 @@ smoke test, not in a browser or on a device.
 - **Still visible:** procedural canopy colours are lighter and crisper than the
   painted backdrops, most noticeably the sanctuary bamboo. Painted canopy
   layers (`art/ASSET_REQUESTS.md` §2) are the intended fix.
+
+## Foliage animation (research, 2026-10-25)
+
+The owner asked for a few animated branches with packs of leaves, plus bushes
+in the mid and near ground. This is how 2D and pixel-art games do it cheaply
+and convincingly, and what Ranitas took from each idea
+(`lib/game/foliage.dart`).
+
+**Branches as hierarchical chains.** A branch is a chain of 3–6 rigid
+segments from a root at the frame edge. Each segment's angle is a rest angle
+plus a *lean*; the lean grows toward the tip (a cantilever bends most at its
+free end) and lags the segment before it, so a gust ripples from trunk to tip
+rather than snapping the whole branch at once. Full spring–pendulum
+simulation (Verlet chains, as in Rayman Legends' foliage or Ori's grass) is
+the convincing version, but it costs state, needs a fixed step, and drifts
+under frame hitches. Ranitas instead evaluates the lean as a *function of
+time and a short wind trace*: a 3 s ring buffer of the model's `wind`,
+sampled each frame, read back with a lag of `x/641 × 0.5 s` (a gust front
+crossing the screen with the wind) plus `0.07 s` per segment. This gives the
+visible phase lag of a chain with no integration, stays deterministic, and
+freezes trivially under reduced motion. Leans are clamped to ±0.36 rad, so
+the geometry has a hard reach bound (`root + Σ segment + leaf radius`) that
+the clear-lane test checks without sampling poses.
+
+**Gust fronts.** The model already shapes gusts (`windTell` ramp, then a
+3 s sine). What sells them visually is *travel*: things upwind move first.
+The wind trace lag does that for branches and bushes alike, keyed on the
+anchor's x and the wind's sign.
+
+**Leaf packs as instanced sprites.** Drawing each leaf with rects costs a
+draw call per pixel row. `Canvas.drawAtlas` / `drawRawAtlas` draws any number
+of atlas cells in one call with a per-instance `RSTransform` (rotation,
+uniform scale, translation) and a per-instance colour. All branch leaves of a
+biome (~150) are one call; each bush slot is one call. The colour list
+carries the reveal alpha; the paint's `colorFilter` carries the time-of-day
+grade, so leaves darken with the scene without touching the atlas.
+
+**Flutter versus sway, by size.** Large leaves and whole packs sway slowly
+(1.7 Hz here); small leaves flicker faster (3.6 Hz). Amplitude is
+`0.06 + 0.35 × |wind|` rad, so still air only breathes. Rotations are
+quantised to 1/24 turn so pixel edges tick between a few crisp grids instead
+of smearing.
+
+**Leaf-flip highlight frames.** Real foliage sparkles because a leaf turning
+its underside or catching the sun flashes lighter for a frame or two. The
+atlas keeps a *lit* row for every leaf row (tones shifted one step up); when
+a leaf's flutter phase passes 0.93 in moving air it swaps to that row for a
+few frames. This is the single cheapest cue for "wind in leaves".
+
+**Bushes.** Layered blobs anchored at the ground, sheared about the base
+(`x += height × shear`) with the same lagged wind, so the top moves and the
+root stays planted. The bodies are static and baked into one `Picture` per
+slot and night bucket; the leaves on top are atlas instances that carry the
+per-bush shear and flutter. Grotto bushes add three additive glow-moss
+flecks each.
+
+**Depth ordering.** Mid-bank bushes sit on the far shores just outside the
+basin edge (behind the pads, scale 0.7, small-leaf row). Branches draw in the
+canopy slot above frogs and insects, in the side quarters only. Near bushes
+draw after the corner foreground, at the bottom corners, scale 1, large-leaf
+row. Breathing parallax follows each slot's depth.
+
+**Wind coupling.** Branch lean = `−(wind_lagged × 0.55 + windTell × 0.05)
+× windResponse × (0.35 + 0.65 × tip fraction)`: shrinking the angle on both
+sides lifts a branch pointing with the wind and pushes one pointing into it
+down, like a flag, and the sign flips with the wind. Bush shear is
+`wind_lagged × 0.35`, clamped to ±0.3.
+
+**Mobile web budget.** Per frame: ~25 bark strokes (`drawLine`, no AA), one
+`drawRawAtlas` for branch leaves, one per bush slot (two), two `drawPicture`
+calls for bush bodies, and a handful of glow rects in grottos. The atlas is a
+128 × 64 image baked once from deterministic bytes
+(`LeafAtlas.pixelsFor`). Nothing allocates per frame beyond three
+`Float32List`s sized to the instance count.
+
+**Recommended architecture (taken):** procedural atlas + chains + bushes in
+`foliage.dart`, hooked into the layer painter's slots; painted overrides for
+the atlas (`foliage-<biome>.webp`) and a branch segment strip
+(`branches-<biome>.webp`). **Painted assets that would improve it most:** a
+hand-pixelled atlas per biome (the procedural leaves are readable but
+generic), and bark strips with painted twigs, since the straight strokes read
+as wire next to the painted trunks. A painted bush body sheet (3 silhouettes
+per biome) would be the next step.
 
 ## Prime sizes and pixel scaling
 
@@ -219,10 +312,13 @@ see `docs/policy.md`).
    use a fixed table or a seeded subset?
 3. Should night push every biome toward one indigo, or should each biome keep
    its own palette? Would you accept a fragment-shader LUT later?
-4. Which painted elements must glow at night in each backdrop? Do you want to
-   approve the script-generated emissive masks, or paint them instead?
-5. Which other regions should palette-cycle (grotto water, mushroom caps, the
-   alpine stream)?
+4. Do you want to approve the regenerated emissive masks (lantern, fungi,
+   moon, fireflies, stars), or paint them instead? Maple, autumn-mist and mist
+   have no painted light source at all; should one be painted in (lanterns on
+   the bridge, a lamp in the cypress)?
+5. Answered 2026-10-25: grotto water shimmer, every mushroom cluster, the
+   moon, evening stars and sunset glitter now cycle (design D4). Which of them
+   should be louder or quieter?
 6. How many painted layers per biome are you willing to commission?
 7. Should canopy layers ever cross the central play lane?
 8. Do you want any giant or tiny pads beyond the default size ranges?

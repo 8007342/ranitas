@@ -106,6 +106,8 @@ void main() {
       IndexMaps.fallingWater(density: .4, stretch: 2.2),
       IndexMaps.rippleBands(),
       IndexMaps.radialPulse(),
+      IndexMaps.glints(),
+      IndexMaps.glints(density: .03, maxLength: 6),
     ]) {
       final map = generator(40, 30, 6, 9);
       expect(map.length, 40 * 30);
@@ -115,6 +117,50 @@ void main() {
     final halo = IndexMaps.radialPulse()(40, 40, 8, 1);
     expect(halo[0], 0, reason: 'halo corners stay transparent');
     expect(halo[20 * 40 + 20], greaterThan(0), reason: 'halo centre is lit');
+    // Glints are sparse: most of the water shows through.
+    final glints = IndexMaps.glints(density: .04)(200, 40, 8, 3);
+    final lit = glints.where((s) => s > 0).length;
+    expect(lit, inInclusiveRange(200 * 40 ~/ 40, 200 * 40 ~/ 4));
+    expect(glints, equals(IndexMaps.glints(density: .04)(200, 40, 8, 3)));
+  });
+
+  test('every region of every backdrop is in frame and periodic', () async {
+    final seen = <String>{};
+    for (final biome in PondModel.biomes) {
+      final probe = PondModel(seed: 0)..biome = biome;
+      if (!seen.add(probe.backdropAsset)) continue;
+      final specs = PaletteCycles.specsFor(probe.backdropAsset);
+      expect(specs, isNotEmpty, reason: probe.backdropAsset);
+      final ids = specs.map((s) => s.id).toSet();
+      expect(ids.length, specs.length, reason: 'duplicate ids in $biome');
+      for (final spec in specs) {
+        expect(spec.rect.left, greaterThanOrEqualTo(0), reason: spec.id);
+        expect(spec.rect.top, greaterThanOrEqualTo(0), reason: spec.id);
+        expect(spec.rect.right, lessThanOrEqualTo(641), reason: spec.id);
+        expect(spec.rect.bottom, lessThanOrEqualTo(359), reason: spec.id);
+        expect(spec.ramp.length, inInclusiveRange(2, 15));
+        expect(spec.fps, greaterThan(0));
+        if (spec.additive) {
+          expect(
+            spec.ramp.any((c) => (c >> 24) & 0xff > 0),
+            isTrue,
+            reason: '${spec.id} additive ramp carries alpha',
+          );
+        }
+        final cycle = await PaletteCycle.bake(spec);
+        expect(cycle.frameCount, spec.slots);
+        for (final t in [0.0, .7, 5.3, 61.1]) {
+          expect(
+            cycle.frameIndex(t + cycle.period),
+            cycle.frameIndex(t),
+            reason: '${spec.id} period',
+          );
+          expect(cycle.frameIndex(t, reducedMotion: true), 0);
+        }
+        cycle.dispose();
+      }
+    }
+    expect(seen, hasLength(12));
   });
 
   test('painted index maps decode slot = round(gray / 16)', () async {
@@ -202,12 +248,26 @@ void main() {
         'jade_sanctuary',
       ]),
     );
-    for (final spec in PaletteCycles.specsFor('pond-grotto.webp')) {
+    // Every backdrop now glints, twinkles or glows somewhere.
+    expect(withRegions, PondModel.biomes.toSet());
+    final grotto = PaletteCycles.specsFor('pond-grotto.webp');
+    expect(
+      grotto.where((s) => s.id.startsWith('cap-') || s.id.startsWith('fungi')),
+      hasLength(12),
+      reason: 'twelve painted fungus clusters glow',
+    );
+    expect(grotto.map((s) => s.id), containsAll(['shimmer', 'moon']));
+    for (final spec in grotto) {
       expect(spec.rect.left, greaterThanOrEqualTo(0));
       expect(spec.rect.right, lessThanOrEqualTo(641));
       expect(spec.rect.bottom, lessThanOrEqualTo(359));
       expect(spec.ramp.length, inInclusiveRange(2, 15));
     }
+    // Stars and glows are emissive (ungraded); water glitter is graded.
+    final blossom = PaletteCycles.specsFor('pond-blossom.webp');
+    expect(blossom.firstWhere((s) => s.id == 'star').emissive, isTrue);
+    expect(blossom.firstWhere((s) => s.id == 'glitter').emissive, isFalse);
+    expect(blossom.firstWhere((s) => s.id == 'glitter').additive, isTrue);
   });
 }
 

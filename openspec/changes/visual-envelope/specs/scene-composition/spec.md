@@ -48,6 +48,44 @@ be procedural or painted. Reduced motion SHALL freeze cycling on its first frame
 - **THEN** the waterfall region shows every ramp shift once and returns to its first frame
 - **AND** pixels outside the region are unchanged by the cycle.
 
+#### Scenario: Every painted light source glows at night
+
+- **GIVEN** any backdrop
+- **WHEN** daylight reaches 0
+- **THEN** each painted light source (lantern, fungus cluster, moon, evening star, firefly) is lit either through the emissive mask or through an additive emissive cycle region placed on it
+- **AND** sun or moon glitter on the water is graded with the scene rather than kept lit.
+
+### Requirement: Animated foliage
+
+Each biome SHALL grow a few animated branches entering from the top corners,
+carrying packs of leaves, and bushes on the far shores and in the near
+corners. Leaves SHALL be drawn as instanced sprites from a leaf atlas that is
+procedural by default and MAY be replaced by a painted atlas. Branches SHALL
+bend as chains whose lean grows toward the tip and lags the wind by the
+anchor's distance along the wind, bounded so that the central 50 % of width
+stays clear below 30 % of frame height at any pose. Bushes SHALL sway from the
+ground. Leaves SHALL flutter at a rate that depends on their size and MAY
+flash a lit frame in moving air. Foliage SHALL follow the time-of-day grade,
+the richness reveal and reduced motion (frozen at rest).
+
+#### Scenario: A gust crosses the pond
+
+- **GIVEN** any biome with the foliage atlas ready
+- **WHEN** the model's wind rises from 0 to 0.8 over a second
+- **THEN** branch tips lean more than their roots, the lean of every segment stays within ±0.36 rad, and the sign of the lean flips with the wind direction
+- **AND** no joint or leaf pack of any branch enters the central lane at any lean.
+
+#### Scenario: Reduced motion freezes the foliage
+
+- **GIVEN** reduced motion is on
+- **WHEN** time advances with wind present
+- **THEN** every branch lean and bush shear is zero and no leaf flutters or flips.
+
+#### Scenario: Procedural atlas is deterministic
+
+- **WHEN** the leaf atlas is baked twice for the same biome
+- **THEN** both bakes produce identical pixel bytes, every cell contains opaque pixels, and alpha is only 0 or 255.
+
 ### Requirement: Data-driven layered composition
 
 Each biome SHALL compose an ordered stack of layers in slots: far bank, mid

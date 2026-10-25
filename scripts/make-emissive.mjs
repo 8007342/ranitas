@@ -50,7 +50,9 @@ const T = {
   saturated: 0.42, // HSV saturation for coloured lights
   whiteLuma: 0.86, // near-white lights (moon, stars, windows)
   whiteSat: 0.28,
-  maxBlob: 2600, // px; larger blobs are scenery, not lights
+  minColouredContrast: 0.04, // coloured lights fill their own blur radius
+  maxBlob: 2600, // px; larger white blobs are scenery, not lights
+  maxColouredBlob: 16000, // px; a fungus cluster or a lit lantern with its sill
   minBlob: 3, // px; one or two dithered pixels are noise
   minCoverage: 0.0006, // of frame area; below it the mask is skipped
 };
@@ -93,6 +95,7 @@ async function makeMask(name) {
     .toBuffer();
   const n = width * height;
   const raw = new Float32Array(n);
+  const isColoured = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const r = rgb[i * 3];
     const g = rgb[i * 3 + 1];
@@ -100,14 +103,19 @@ async function makeMask(name) {
     const l = luma(r, g, b);
     if (l < T.minLuma) continue;
     const contrast = l - blurred[i] / 255;
-    if (contrast < T.minContrast) continue;
     const s = saturation(r, g, b);
     const coloured = s >= T.saturated && lightHue(hue(r, g, b));
+    // A coloured light fills its own blur radius (a fungus cap, a lantern
+    // window), so it needs less contrast against the local background.
+    if (contrast < (coloured ? T.minColouredContrast : T.minContrast)) {
+      continue;
+    }
     const white = l >= T.whiteLuma && s <= T.whiteSat;
     if (!coloured && !white) continue;
     const byContrast = Math.min(1, (contrast - T.minContrast) / 0.22);
     const byLuma = Math.min(1, (l - T.minLuma) / 0.3);
-    raw[i] = Math.min(1, 0.35 + 0.65 * byContrast * byLuma);
+    raw[i] = Math.min(1, 0.35 + 0.65 * Math.max(coloured ? .6 : 0, byContrast) * byLuma);
+    isColoured[i] = coloured ? 1 : 0;
   }
 
   // Connected components (4-neighbour) to drop large and tiny blobs.
@@ -141,7 +149,13 @@ async function makeMask(name) {
         stack[top++] = i + width;
       }
     }
-    if (members.length > T.maxBlob || members.length < T.minBlob) {
+    // Coloured blobs (fungi clusters, lantern windows with their lit sills)
+    // may be large; only white blobs (snow, sky patches) are capped tightly.
+    let colouredMembers = 0;
+    for (const i of members) colouredMembers += isColoured[i];
+    const maxBlob =
+      colouredMembers * 2 >= members.length ? T.maxColouredBlob : T.maxBlob;
+    if (members.length > maxBlob || members.length < T.minBlob) {
       for (const i of members) raw[i] = 0;
     } else {
       kept += members.length;
