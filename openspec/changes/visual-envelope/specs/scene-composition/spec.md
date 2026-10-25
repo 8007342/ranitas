@@ -86,11 +86,21 @@ optional assets and their exact formats SHALL be documented.
 Within drizzle and storm sessions rain SHALL vary continuously through a seeded
 intensity envelope, including lulls and, in storms, at least one downpour.
 Intensity SHALL drive drop density, streak length, impact ripples, cloud
-darkening and insect shelter. Weather SHALL follow nature: clear sessions stay
-dry (rain needs cloud); mist never produces showers (fog forms in stable air),
-but its fog SHALL thicken as daylight fades and thin as it returns, and thick
-fog MAY shed a fine fog drizzle no stronger than 0.15. Rain SHALL never produce
-lightning or flashes.
+darkening and insect shelter. Rain SHALL never produce lightning or flashes.
+
+#### Scenario: A storm breathes
+
+- **GIVEN** a storm session
+- **WHEN** 360 s of foreground simulation elapse
+- **THEN** rain intensity spans at least 0.4 between its lowest and highest values
+- **AND** it never changes by more than 0.05 per second.
+
+### Requirement: Weather follows nature
+
+Weather SHALL behave as it does in nature. Clear sessions SHALL stay dry,
+because rain needs cloud. Mist SHALL never produce showers, because fog forms
+in stable air; its fog SHALL thicken as daylight fades and thin as it returns,
+and thick fog MAY shed a fine fog drizzle no stronger than 0.15.
 
 #### Scenario: Fog drizzle at night
 
@@ -99,10 +109,3 @@ lightning or flashes.
 - **THEN** the fog is thin and no drizzle falls
 - **WHEN** daylight approaches 0
 - **THEN** the fog is thick and fine drizzle may come and go, never above intensity 0.15.
-
-#### Scenario: A storm breathes
-
-- **GIVEN** a storm session
-- **WHEN** 360 s of foreground simulation elapse
-- **THEN** rain intensity spans at least 0.4 between its lowest and highest values
-- **AND** it never changes by more than 0.05 per second.

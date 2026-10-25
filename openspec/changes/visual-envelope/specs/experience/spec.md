@@ -41,6 +41,38 @@ Insects SHALL emerge gradually after activation with zero initial opacity, risin
 - **AND** it spawns at most one insect when below target, giving a maximum target of 18
 - **AND** a lower target does not require instant removal of existing insects.
 
+### Requirement: Deterministic JEV companion
+
+JEV SHALL retain analytical projection at 4 Hz, augmented by a compiled,
+depth-aware 259-parameter synthetic-imitation prior that sees the target perch
+and the perspective at both ends of the jump. It SHALL defer while either frog
+is busy, a user action is queued or the companion is cooling down, and obey
+settling/sleep. When no arc brings any insect within reach, it SHALL wait and
+re-evaluate for up to 4 s before jumping anyway. The prior SHALL NOT control
+timing, safety, jump thresholds or session duration. Synthetic teacher
+agreement SHALL NOT be represented as real gameplay or human-study evidence.
+
+#### Scenario: Heuristic action selection
+
+- **WHEN** the companion is eligible to act
+- **THEN** JEV evaluates ten samples for each of the three perspective-scaled arcs against projected live-insect velocity
+- **AND** includes the implemented low-arc preference of 0.025 and wind penalty `abs(wind)*height*0.08`
+- **AND** the nearest-live-insect prior suggestion receives only the current 0.008 additive score bonus, which can break near-ties
+- **AND** landing sets a seeded cooldown of 1.1–2.4 s without remote inference.
+
+#### Scenario: Patient companion
+
+- **GIVEN** the companion is eligible and no insect is within reach of any arc
+- **WHEN** JEV evaluates
+- **THEN** it does not jump, and evaluates again 0.25 s later
+- **AND** after 4 s of waiting it jumps with its best arc regardless.
+
+#### Scenario: Synthetic evidence remains scoped
+
+- **WHEN** reporting the 12→16→3 network trained on 24,000 synthetic depth-aware examples
+- **THEN** the manifest's 93.4% agreement over 4,000 held-out synthetic examples, versus a 64.5% majority baseline, is described as teacher-action agreement
+- **AND** simulation catch-per-jump figures are described as simulation, with no human study or validated calming effect inferred.
+
 ## ADDED Requirements
 
 ### Requirement: Biome night insect sets

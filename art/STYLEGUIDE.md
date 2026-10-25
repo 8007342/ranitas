@@ -6,8 +6,8 @@ Ranitas is designed for widescreen high-resolution displays in **landscape (~16:
 
 | Layer | Dimensions (px) | Primality | Aspect Ratio | Purpose |
 | --- | --- | --- | --- | --- |
-| **Scenic Backdrop Exports** (`assets/images/pond-*.webp`) | `2557 × 1439` | Both prime | `1.7769:1` (~16:9) | Lossless/high-density WebP widescreen background art |
-| **Foreground Parallax Overlays** (`assets/images/foreground-*.webp`) | `2557 × 1439` | Both prime | `1.7769:1` (~16:9) | Alpha-masked corner vegetation & botanical framing |
+| **Scenic Backdrop Exports** (`assets/images/pond-*.webp`) | `2752 × 1536` | 2 × source | `1.7917:1` (~16:9) | Lossless/high-density WebP widescreen background art |
+| **Foreground Parallax Overlays** (`assets/images/foreground-*.webp`) | `2752 × 1536` | 2 × source | `1.7917:1` (~16:9) | Alpha-masked corner vegetation & botanical framing |
 | **Frog Character Sprite Sheets** (`assets/images/frog-*-sheet.webp`) | `1031 × 521` | Both prime | `4 × 2` pose atlas | 8-pose reference & hybrid sprite atlas per frog |
 | **Logical Procedural Canvas** (`PondRenderer`) | `641 × 359` | Both prime | `1.7855:1` (~16:9) | Crisp pixel-art actor, water, motif, & weather canvas |
 

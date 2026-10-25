@@ -270,7 +270,7 @@ To achieve authentic depth, specular luminescence, and seamless blending, Ranita
 ---
 
 ### Tier 0: Scenic Full-Bleed Backdrop & Sky Atmosphere
-- **Source Art**: Lossless WebP scenic backdrops (`assets/images/pond-*.webp`, 2557 × 1439 px, prime-dimensioned).
+- **Source Art**: Lossless WebP scenic backdrops (`assets/images/pond-*.webp`, 2752 × 1536 px, exactly 2× the 1376 × 768 sources).
 - **Fallback Procedural Scenery**: 3-layer parallax mountain ridges, distant pine/willow tree treeline, and gradient sky.
 - **Atmospheric Veil**: Transparent day/night color modulation:
   - Deep blue night wash: `#101f48` at alpha $0.06 + 0.60 \cdot \text{night}$
@@ -468,7 +468,7 @@ Nestled near Pad 0 or Pad 1 in tranquil biomes (`sanctuary`, `blossom`):
 
 The uppermost framing layer provides immense scenic depth:
 - **Foreground Botanical Framing**:
-  Transparent WebP foreground assets (`assets/images/foreground-*.webp`, 2557 × 1439 px) representing silhouette marsh vegetation, weeping willow fronds, sakura branches, or grotto rock arches.
+  Transparent WebP foreground assets (`assets/images/foreground-*.webp`, 2752 × 1536 px) representing silhouette marsh vegetation, weeping willow fronds, sakura branches, or grotto rock arches.
 - **Dynamic Procedural Foliage**:
   Corner reeds, cattails, and wildflowers swaying in the wind ($windTell$ and $wind$ forces):
   $$\text{sway} = \sin(t \cdot 0.65 + \text{offset}) \cdot 2.5 + wind \cdot 3.0$$

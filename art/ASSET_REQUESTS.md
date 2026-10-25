@@ -25,7 +25,10 @@ Keep this file and that registry in sync.
 - Commit source PNGs to `art/source/` and run `node scripts/prepare-art.mjs` to
   export lossless WebP into `assets/images/`. Run `npm run check:assets`
   afterwards to check the file budget (Cloudflare caps each file at 25 MiB).
-- Prime dimensions are a house convention. Keep the sizes given below.
+- **Sizes:** paint every scenic layer at the 1376 × 768 source grid (or a
+  given fraction of it). `prepare-art.mjs` exports at exactly 2× (2752 × 1536),
+  so each painted pixel becomes a 2 × 2 block. Don't deliver pre-scaled art at
+  other sizes, because a non-integer resample makes pixel widths uneven.
 
 Biome ids: `willow`, `blossom`, `cypress`, `maple`, `sanctuary`, `grotto`,
 `alpine`, `lotus`, `firefly`, `autumn_mist`, `jade_sanctuary`, `crystal_grotto`.
@@ -61,13 +64,13 @@ palette."*
 
 | File | Size | Anchor |
 | --- | --- | --- |
-| `canopy-<biome>.png` | 2557 × 719 | top edge, full width |
+| `canopy-<biome>.png` | 1376 × 384 (painted grid), exported 2× | top edge, full width |
 
 These are drawn above the frogs and insects, sway with wind, and are graded
-with the time of day. The layer maps 1:1 onto the top half of the 2557 × 1439
-frame. **In the central 50 % of the width (x 640–1918), keep every row below
-y = 431 transparent**, because that is 30 % of frame height and the frogs' high
-arcs pass there. Hanging elements may reach the bottom of the layer in the left
+with the time of day. The layer maps 1:1 onto the top half of the 1376 × 768
+source frame. **In the central 50 % of the width (x 344–1032), keep every row
+below y = 230 transparent**, because that is 30 % of frame height and the frogs'
+high arcs pass there. Hanging elements may reach the bottom of the layer in the left
 and right quarters.
 
 | Biome | Content |
@@ -87,7 +90,7 @@ sanctuary.
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `midbank-<biome>.png` | 2557 × 1439 | transparent; drawn after the water and before the pads |
+| `midbank-<biome>.png` | 1376 × 768 | transparent; drawn after the water and before the pads |
 
 These hold reeds, rocks and shrubs standing at the far and side shores, in front
 of the painted water, so the banks get depth. Keep them outside the water basin
@@ -97,7 +100,7 @@ interior. Use the backdrop as the reference and paint only shore elements.
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `foreground-<biome>.png` | 2557 × 1439 | transparent corner framing, replacing the 3 shared ones |
+| `foreground-<biome>.png` | 1376 × 768 | transparent corner framing, replacing the 3 shared ones |
 
 Follow the existing `foreground-*.png` rules: lower-left and lower-right
 corners only, central water lane fully open.
@@ -106,7 +109,7 @@ corners only, central water lane fully open.
 
 | File | Size | Notes |
 | --- | --- | --- |
-| `emissive-<backdrop>.png` | 2557 × 1439 | white = emits light, black = not; grayscale or alpha |
+| `emissive-<backdrop>.png` | 1376 × 768 | white = emits light, black = not; grayscale or alpha |
 
 `scripts/make-emissive.mjs` (`npm run art:emissive`) generates first-pass masks
 automatically for `pond-grotto`, `pond-crystal-grotto`, `pond-sanctuary`,
@@ -158,12 +161,12 @@ result.
 - Backdrops whose glow masks didn't key cleanly (`pond-blossom`, `pond-maple`,
   `pond-lotus`, `pond-alpine`, `pond-mist`, `pond-autumn-mist`): no repaint
   needed. A painted `emissive-*.png` (§5) is enough.
-- Backdrop re-exports at a whole-number scale are **on hold** until the owner
-  decides; see "Prime sizes and pixel scaling" in `docs/visual-envelope.md`.
+- Backdrop and foreground re-exports at a whole-number scale: **done**
+  (2752 × 1536 = 2 × source, made by script, no repaint needed). Future painted
+  art should follow the size rule under Shared rules.
 
 ## 8. Not yet wired (wanted later)
 
 - `insects-night-sheet.png`: moth, mayfly and glow-beetle wing frames (8×8
   effective pixels, 4 frames each). Insects are currently drawn procedurally.
-- Whole-number re-exports of every backdrop (e.g. 2752 × 1536 = 2 × 1376 × 768).
-  On hold pending the owner's decision; see §7.
+- Whole-number re-exports: done (§7).

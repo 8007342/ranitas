@@ -40,8 +40,8 @@ void main() {
         final backdrop = await _loadAssetImage(
           'assets/images/${probe.backdropAsset}',
         );
-        expect(backdrop.width, 2557);
-        expect(backdrop.height, 1439);
+        expect(backdrop.width, 2752);
+        expect(backdrop.height, 1536);
 
         final cycles = <PaletteCycle>[];
         for (final spec in PaletteCycles.specsFor(probe.backdropAsset)) {

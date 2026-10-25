@@ -66,7 +66,11 @@ session. It is not a benchmark.
    minutes. Four agents (three implementers plus me) ran it repeatedly. A
    shared, warm Flutter tool cache or a `flutter test --concurrency` hint in the
    forge docs might help.
-5. **Leftover worktrees.** Isolated subagents left
+5. **`node_modules` absent in a fresh checkout.** The art scripts failed with
+   `ERR_MODULE_NOT_FOUND` for `sharp` until `npm ci` ran. That is expected for a
+   fresh clone, but a startup-context line saying "JS deps not installed; run
+   `npm ci`", like the existing `base_state` lines, would save a round trip.
+6. **Leftover worktrees.** Isolated subagents left
    `.claude/worktrees/agent-*` checkouts behind, which show up as untracked
    `.claude/` in `git status`.
 

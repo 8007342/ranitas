@@ -38,8 +38,9 @@ const candidates = new Set([
 
 const artDir = 'art/source';
 const outDir = 'assets/images';
-const OUT_W = 2557;
-const OUT_H = 1439;
+// Matches the whole-number scenic export (2 × 1376 × 768).
+const OUT_W = 2752;
+const OUT_H = 1536;
 
 // Tuning (per source pixel at 1376 × 768).
 const T = {

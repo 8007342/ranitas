@@ -199,13 +199,20 @@ A whole-number re-export (e.g. 2752×1536 = 2 × 1376×768) removes one of the
 three resamples and halves the file weight. It doesn't make the final
 device-scale even, because screens vary. Keeping primes as a house style is
 fine. The only change needed is to stop baking a non-integer resample into the
-files. This is not decided yet; it is open question 10.
+files.
+
+**Decided 2026-10-25:** re-export at a whole number. `prepare-art.mjs` now
+exports scenic art at exactly 2× its source (2752 × 1536). Downsampling the
+export by 2 reproduces the source pixel for pixel. The emissive masks were
+regenerated at the same size. Asset weight went from 18.17 to 18.53 MiB.
 
 ## Open questions
 
 Answered on 2026-10-25 and removed from this list: showers and fog (now
 follows nature), cycle feel (by material), drift amount (small, all pads),
-riding during sleep (yes), and regenerating sheets (yes, on request).
+riding during sleep (yes), regenerating sheets (yes, on request), the
+whole-number re-export (done), and a depth-aware JEV (retrained, plus patience;
+see `docs/policy.md`).
 
 1. In storms, should thunder density follow rain intensity?
 2. Which night insects are prey and which are only ambience? Should each biome
@@ -218,11 +225,8 @@ riding during sleep (yes), and regenerating sheets (yes, on request).
    alpine stream)?
 6. How many painted layers per biome are you willing to commission?
 7. Should canopy layers ever cross the central play lane?
-8. Should the backdrops be re-exported at a whole-number scale (see "Prime
-   sizes and pixel scaling")?
-9. Do you want any giant or tiny pads beyond the default size ranges?
-10. May pads slide behind one another, with the near pad occluding the far one?
-11. Is a rotated-ellipse pad renderer worth it for true yaw?
-12. Should frog scale be continuous, or snap between a few painted sizes?
-13. Should depth jumps also be able to land on ambient pads, or in open water?
-14. Should JEV learn depth-aware jumps? That needs retraining.
+8. Do you want any giant or tiny pads beyond the default size ranges?
+9. May pads slide behind one another, with the near pad occluding the far one?
+10. Is a rotated-ellipse pad renderer worth it for true yaw?
+11. Should frog scale be continuous, or snap between a few painted sizes?
+12. Should depth jumps also be able to land on ambient pads, or in open water?

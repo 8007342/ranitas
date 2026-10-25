@@ -31,6 +31,14 @@
 - [x] 4.5 Procedural away/toward poses; optional depth sheet loading
 - [x] 4.6 Rewrite fixed-home tests as pad-relative invariants; add slide, boundedness and moving-landing tests
 
+## 6. Owner follow-ups (2026-10-25)
+
+- [x] 6.1 Weather follows nature: fog thickens toward night, fine fog drizzle, no showers in mist or clear
+- [x] 6.2 Every pad roams a small section; ripple Stokes drift, koi and pad wakes; roaming through sleep
+- [x] 6.3 Cycle feel by material (water smooth, fire stepped)
+- [x] 6.4 Whole-number scenic re-export (2752 × 1536) and regenerated emissive masks
+- [x] 6.5 Depth-aware JEV prior (12→16→3) retrained, plus patience when nothing is in reach
+
 ## 5. Integration (branch `work/visual-envelope`)
 
 - [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean

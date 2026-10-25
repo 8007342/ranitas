@@ -21,3 +21,25 @@ sheet or from procedural pixel art.
 
 - **WHEN** a frog jumps toward the viewer
 - **THEN** its launching, ascending, falling and chomping poses use the front view.
+
+### Requirement: The world supports large high-resolution landscape screens
+
+The game SHALL maintain a widescreen landscape playfield on every screen
+orientation. Native platforms SHALL request landscape orientation. Scenic and
+foreground exports SHALL be a whole-number multiple of their source art
+(currently `2752 × 1536`, exactly 2 × `1376 × 768`), so that every source pixel
+becomes an equal block and no uneven resample is baked into the files. Frog
+character sprite sheets SHALL use `1031 × 521` dimensions, and the animated
+logical canvas SHALL be `641 × 359`. Pixel scaling SHALL be controlled
+explicitly rather than relying on primality.
+
+#### Scenario: A high-resolution widescreen display
+
+- **WHEN** the browser renders on a widescreen or ultrawide display
+- **THEN** the complete 641:359 landscape playfield remains centered with surrounding background
+- **AND** the frog landing zones remain inside the playfield
+
+#### Scenario: Exact export blocks
+
+- **WHEN** a scenic export is sampled back down by its whole-number factor
+- **THEN** it reproduces its source art pixel for pixel.

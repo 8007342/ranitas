@@ -5,11 +5,13 @@ are retained in `art/source/`; the Flutter bundle includes lossless/high-res Web
 exports from `assets/images/`. Rebuild exports with `node scripts/prepare-art.mjs`.
 
 All exported scenic backdrops (`pond-*.webp`) and foreground parallax overlays
-(`foreground-*.webp`) are **2557 × 1439 pixels** (both prime, ~16:9 widescreen
-landscape for high-resolution large displays). Exported frog character sheets
-(`frog-*-sheet.webp`) are **1031 × 521 pixels** (both prime). The procedural
-animated layer uses a **641 × 359** logical canvas (both prime). Prime dimensions
-are an art constraint, not a guarantee of antialiasing; scaling is explicit.
+(`foreground-*.webp`) are **2752 × 1536 pixels**: exactly 2× their 1376 × 768
+sources, so each source pixel is an exact 2 × 2 block. Earlier exports used a
+prime 2557 × 1439, which baked a non-integer 1.858× nearest-neighbour resample
+and uneven pixel widths into the files (see `docs/visual-envelope.md`). Frog
+character sheets (`frog-*-sheet.webp`) are **1031 × 521 pixels**. The
+procedural animated layer uses a **641 × 359** logical canvas. Scaling to the
+screen is explicit and nearest-neighbour.
 
 See [STYLEGUIDE.md](STYLEGUIDE.md) for the complete visual architecture, color
 palettes, and 10-state frog animation specification.

@@ -2,241 +2,65 @@
 import 'dart:math' as math;
 
 /// Synthetic geometric imitation prior; the caller retains timing and safety.
+/// Depth-aware: it sees the target pad and the perspective at both ends.
 class JumpPolicy {
   static const actions = ['tap', 'low', 'high'];
+  static const int inputs = 12;
+  static const int hidden = 16;
   static double _clip(double x) => x.clamp(-1.0, 1.0).toDouble();
-  static List<double> encode({
-    required double frogX,
-    required double frogY,
-    required double bugX,
-    required double bugY,
-    required double bugVx,
-    required double bugVy,
-    required double energy,
-    required double wind,
-  }) {
-    final raw = [frogX, frogY, bugX, bugY, bugVx, bugVy, energy, wind];
-    if (raw.any((x) => !x.isFinite)) return List.filled(8, double.nan);
-    return [
-      (frogX - .5) / .5,
-      (frogY - .7) / .1,
-      (bugX - frogX) / .7,
-      (frogY - bugY) / .6,
-      bugVx / .15,
-      bugVy / .08,
-      2 * energy - 1,
-      wind,
-    ].map(_clip).toList();
+  static List<double> encode({required double frogX, required double frogY,
+    required double bugX, required double bugY, required double bugVx,
+    required double bugVy, required double energy, required double wind,
+    required double targetX, required double targetY,
+    required double scaleFrom, required double scaleTo}) {
+    final raw = [frogX, frogY, bugX, bugY, bugVx, bugVy, energy, wind,
+      targetX, targetY, scaleFrom, scaleTo];
+    if (raw.any((x) => !x.isFinite)) return List.filled(inputs, double.nan);
+    return [(frogX-.5)/.5, (frogY-.75)/.2, (bugX-frogX)/.7,
+      (frogY-bugY)/.6, bugVx/.15, bugVy/.08, 2*energy-1, wind,
+      (targetX-frogX)/.7, (targetY-frogY)/.3, (scaleFrom-.8)/.25,
+      (scaleTo-.8)/.25]
+      .map(_clip).toList();
   }
-
-  static String suggest({
-    required double frogX,
-    required double frogY,
-    required double bugX,
-    required double bugY,
-    required double bugVx,
-    required double bugVy,
-    required double energy,
-    required double wind,
-  }) => choose(
-    encode(
-      frogX: frogX,
-      frogY: frogY,
-      bugX: bugX,
-      bugY: bugY,
-      bugVx: bugVx,
-      bugVy: bugVy,
-      energy: energy,
-      wind: wind,
-    ),
-  );
+  static String suggest({required double frogX, required double frogY,
+    required double bugX, required double bugY, required double bugVx,
+    required double bugVy, required double energy, required double wind,
+    required double targetX, required double targetY,
+    required double scaleFrom, required double scaleTo}) =>
+    choose(encode(frogX: frogX, frogY: frogY, bugX: bugX, bugY: bugY,
+      bugVx: bugVx, bugVy: bugVy, energy: energy, wind: wind,
+      targetX: targetX, targetY: targetY, scaleFrom: scaleFrom,
+      scaleTo: scaleTo));
   static String choose(List<double> features) {
     final p = scores(features);
     var best = 0;
-    for (var k = 1; k < 3; k++) {
-      if (p[k] > p[best]) best = k;
-    }
+    for (var k=1; k<3; k++) { if (p[k]>p[best]) best=k; }
     return actions[best];
   }
-
   /// Probabilities in tap/low/high order. Invalid input falls back to low.
   static List<double> scores(List<double> features) {
-    if (features.length != 8 || features.any((x) => !x.isFinite)) {
-      return [0, 1, 0];
-    }
-    final x = features.map(_clip).toList();
-    final h = List<double>.generate(12, (j) {
-      var z = _b[j];
-      for (var i = 0; i < 8; i++) {
-        z += x[i] * _w[j * 8 + i];
-      }
+    if (features.length!=inputs || features.any((x)=>!x.isFinite)) { return [0,1,0]; }
+    final x=features.map(_clip).toList();
+    final h=List<double>.generate(hidden, (j) {
+      var z=_b[j];
+      for(var i=0;i<inputs;i++) { z+=x[i]*_w[j*inputs+i]; }
       // Stable tanh without an external runtime.
-      final e = math.exp(-2 * z.abs());
-      return (z < 0 ? -1.0 : 1.0) * (1 - e) / (1 + e);
+      final e=math.exp(-2*z.abs());
+      return (z<0 ? -1.0 : 1.0)*(1-e)/(1+e);
     });
-    final z = List<double>.generate(3, (k) {
-      var s = _c[k];
-      for (var j = 0; j < 12; j++) {
-        s += h[j] * _v[k * 12 + j];
-      }
+    final z=List<double>.generate(3,(k) {
+      var s=_c[k];
+      for(var j=0;j<hidden;j++) { s+=h[j]*_v[k*hidden+j]; }
       return s;
     });
-    if (z.any((x) => !x.isFinite)) return [0, 1, 0];
-    final m = z.reduce(math.max), p = z.map((q) => math.exp(q - m)).toList();
-    final total = p.reduce((a, b) => a + b);
-    if (!total.isFinite || total <= 0) return [0, 1, 0];
-    return p.map((q) => q / total).toList();
+    if (z.any((x)=>!x.isFinite)) return [0,1,0];
+    final m=z.reduce(math.max), p=z.map((q)=>math.exp(q-m)).toList();
+    final total=p.reduce((a,b)=>a+b);
+    if (!total.isFinite || total<=0) return [0,1,0];
+    return p.map((q)=>q/total).toList();
   }
-
-  static const _w = <double>[
-    0.620527,
-    -1.01711,
-    -11.206948,
-    -1.297284,
-    -0.610353,
-    -0.765113,
-    0.131308,
-    0.096676,
-    -1.705716,
-    -0.829509,
-    -1.758542,
-    11.295714,
-    0.205785,
-    -0.538642,
-    -0.107482,
-    0.032267,
-    9.217515,
-    -0.079208,
-    14.260462,
-    3.849347,
-    1.636581,
-    -0.256174,
-    0.018079,
-    0.042803,
-    -4.550603,
-    -1.003991,
-    -6.139645,
-    9.982694,
-    -0.477089,
-    -0.823279,
-    -0.023324,
-    0.079679,
-    8.107433,
-    -0.066345,
-    6.811272,
-    2.076035,
-    2.264007,
-    -0.179126,
-    -0.197341,
-    -0.066352,
-    11.030806,
-    0.477265,
-    14.337616,
-    -0.685928,
-    2.738376,
-    -0.025409,
-    0.001679,
-    -0.001256,
-    0.760489,
-    -1.101022,
-    0.507888,
-    6.225725,
-    0.331015,
-    -0.565566,
-    0.075245,
-    0.105539,
-    1.051886,
-    0.758217,
-    -1.006664,
-    -3.714594,
-    -0.828683,
-    0.940334,
-    -0.012639,
-    0.149071,
-    -3.245663,
-    -1.440457,
-    -2.400478,
-    6.665811,
-    -0.645109,
-    -1.235465,
-    0.053973,
-    0.067262,
-    -1.522059,
-    -0.514842,
-    12.893684,
-    -2.686111,
-    0.470229,
-    -0.408809,
-    -0.112733,
-    0.082941,
-    3.539003,
-    -0.370913,
-    5.211472,
-    7.296539,
-    -0.23562,
-    -0.267092,
-    0.07351,
-    0.079515,
-    5.123444,
-    0.922458,
-    5.536524,
-    -3.934462,
-    1.797016,
-    0.211006,
-    -0.127535,
-    -0.074418,
-  ];
-  static const _b = <double>[
-    -1.207406,
-    -4.098791,
-    -2.982088,
-    -6.089929,
-    0.55996,
-    1.848552,
-    -0.944252,
-    1.53155,
-    -1.708431,
-    -1.552199,
-    -4.196321,
-    -1.195587,
-  ];
-  static const _v = <double>[
-    6.877407,
-    -4.674086,
-    -7.258908,
-    -3.986614,
-    -3.348612,
-    6.080993,
-    -3.473605,
-    0.750436,
-    -2.039924,
-    7.713876,
-    -7.575669,
-    5.162792,
-    -0.298307,
-    2.424877,
-    1.108086,
-    -1.026839,
-    -0.857906,
-    0.264412,
-    2.034166,
-    0.462398,
-    -0.634469,
-    -0.864493,
-    2.126887,
-    -1.716608,
-    -5.942733,
-    2.176732,
-    6.141239,
-    5.270223,
-    4.554015,
-    -5.980125,
-    1.778054,
-    -1.00723,
-    2.108684,
-    -6.68685,
-    5.586402,
-    -3.559035,
-  ];
-  static const _c = <double>[-6.541794, 2.838806, 3.702988];
+  static const _w = <double>[-0.167709,0.242958,-0.922241,3.803464,-0.516568,-0.993484,-0.08544,0.107184,0.441716,1.891642,-0.479675,0.966232,-0.27957,-0.139823,9.736699,0.18945,2.847101,-0.393084,0.020279,0.083534,-8.844479,1.272557,0.396124,-0.154387,-0.581021,0.049691,-12.840484,1.927353,-0.707659,0.444155,0.033342,0.059563,-1.082425,-1.542765,-0.511292,0.582259,0.375911,0.240137,5.331698,4.863367,-0.384826,-0.409044,-0.00193,-0.061281,-4.46103,2.420472,-0.510449,0.225789,-0.582854,-0.069339,4.710051,-6.821746,0.626276,-0.046018,0.132764,-0.106368,0.431634,-0.382259,-0.098569,0.550025,-0.112604,-0.191356,-6.23876,4.698998,0.093856,-0.357606,0.166911,-0.082895,4.862599,2.669798,-0.15699,-0.122229,0.456163,0.179682,7.354648,-9.908829,0.563514,0.78672,-0.028138,0.011078,-4.007767,-2.337907,0.69287,0.200045,-0.218409,-0.423419,11.58295,2.445917,0.37765,0.261548,0.17988,-0.026419,0.536197,-0.511251,0.41246,-0.139361,-0.409767,-0.099089,0.452084,6.97883,-0.24628,-0.170679,0.112858,-0.074074,-0.401645,1.517849,-0.140817,-0.087522,0.144494,-0.070311,14.974329,-2.126782,1.403787,0.057099,-0.00162,-0.034367,-7.124171,-0.757274,0.081177,0.735571,0.416627,0.328588,1.142164,5.860594,-0.199019,0.197695,-0.049177,-0.054418,0.365801,-0.14794,0.232605,-0.410328,0.000444,-0.13254,5.31932,10.08803,0.088601,-0.824041,0.08106,-0.075431,-3.066519,2.633229,-0.283286,-0.525311,0.345447,-0.027523,-0.962094,-2.105649,-1.619406,0.207275,-0.045407,0.064586,-3.235541,-0.362822,0.126054,0.683387,-0.035861,-0.029325,10.601557,-1.120538,3.146978,0.330294,-0.00051,-0.026194,-9.699943,-1.256969,-0.016679,0.054883,0.416199,0.086284,15.053157,1.776376,1.626544,-0.048499,-0.014081,-0.000119,-7.264867,-0.90273,-1.156253,0.205368,0.739172,-0.170956,4.562127,1.378588,2.055555,0.067787,0.047436,-0.119095,-1.846029,0.473441,0.453581,-0.327178];
+  static const _b = <double>[-0.258072,0.77013,0.878484,-1.404054,0.943177,-1.548214,5.045925,0.5211,-2.368778,1.941084,-0.706999,-4.851567,-0.731064,-0.484268,-1.594913,1.47658];
+  static const _v = <double>[-1.451715,-4.319313,-3.542714,-2.711843,2.537312,-2.829053,3.130721,-4.180453,-2.704812,4.957525,-2.205792,-5.16532,1.49107,3.903054,-4.162876,-3.265903,0.263645,0.306554,-0.301217,1.033453,-0.802132,1.080953,0.651016,0.117324,1.964371,-0.354884,0.852457,-0.170528,-0.197629,-0.100747,0.247351,0.388238,1.382304,4.237013,3.726451,1.973572,-1.93141,1.763758,-3.893984,4.115542,0.701007,-4.64164,1.962938,4.722529,-1.007319,-3.881498,4.402342,2.670626];
+  static const _c = <double>[-3.850083,1.905648,1.944434];
 }

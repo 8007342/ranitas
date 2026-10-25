@@ -1079,6 +1079,7 @@ class PondModel {
         nearestDistance = distance;
       }
     }
+    final target = 1 - frog.leafIndex;
     final prior = nearest == null
         ? null
         : JumpPolicy.suggest(
@@ -1090,10 +1091,14 @@ class PondModel {
             bugVy: nearest.vy,
             energy: frog.energy,
             wind: wind,
+            targetX: _perchX(frog, target),
+            targetY: _leafY(target),
+            scaleFrom: basin.perspectiveAt(frog.y * 359),
+            scaleTo: basin.perspectiveAt(_leafY(target) * 359),
           );
     var best = double.negativeInfinity;
+    var bestReach = 0.0;
     var chosen = 'low';
-    final target = 1 - frog.leafIndex;
     for (final action in ['tap', 'low', 'high']) {
       final flight = _flightDuration(action);
       var value = action == 'low' ? .025 : 0.0;
@@ -1122,6 +1127,8 @@ class PondModel {
         }
         value += max(0, .13 - closest);
       }
+      final reach = value - (action == 'low' ? .025 : 0.0);
+      bestReach = max(bestReach, reach);
       value -= wind.abs() * _height(action) * .08;
       if (action == prior) value += .008;
       if (value > best) {
@@ -1129,8 +1136,20 @@ class PondModel {
         chosen = action;
       }
     }
+    // Patience: with no insect in reach of any arc, JEV waits for a better
+    // chance instead of hopping blindly, but never longer than its patience.
+    if (bestReach < _jevReachThreshold && _jevWaited < _jevPatience) {
+      _jevWaited += .25;
+      return;
+    }
+    _jevWaited = 0;
     _launch(frog, chosen);
   }
+
+  /// JEV waits up to this long (s) for an insect to come within reach.
+  static const double _jevPatience = 4.0;
+  static const double _jevReachThreshold = .01;
+  double _jevWaited = 0;
 
   static double _distance(double x, double y, double bx, double by) =>
       sqrt((x - bx) * (x - bx) + (y - by) * (y - by));

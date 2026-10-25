@@ -1,59 +1,79 @@
 // Offline, dependency-free deterministic synthetic imitation training.
+// Depth-aware teacher: pads sit anywhere in a basin, and arc height scales
+// with the perspective under the frog (visual-envelope design D6/D7).
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const clamp = (x, lo=-1, hi=1) => Math.max(lo, Math.min(hi, x));
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6d2b79f5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t ^= t + Math.imul(t ^ t >>> 7, 61 | t); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const actions = ['tap','low','high'], durations=[.68,.95,1.3], heights=[.13,.25,.39];
-function encode(s) { return [clamp((s.fx-.5)/.5),clamp((s.fy-.7)/.1),clamp((s.bx-s.fx)/.7),clamp((s.fy-s.by)/.6),clamp(s.vx/.15),clamp(s.vy/.08),clamp(2*s.energy-1),clamp(s.wind)]; }
+const IN = 12, H = 16, OUT = 3;
+function encode(s) { return [clamp((s.fx-.5)/.5),clamp((s.fy-.75)/.2),clamp((s.bx-s.fx)/.7),clamp((s.fy-s.by)/.6),clamp(s.vx/.15),clamp(s.vy/.08),clamp(2*s.energy-1),clamp(s.wind),clamp((s.tx-s.fx)/.7),clamp((s.ty-s.fy)/.3),clamp((s.sf-.8)/.25),clamp((s.st-.8)/.25)]; }
+// Perspective is linear in depth, so it interpolates linearly along the ground.
+const perspective = (y, top, bottom) => .56 + .48 * clamp((y - top) / (bottom - top), 0, 1);
 function dataset(seed,n) {
  const r=rng(seed), out=[];
  while(out.length<n) {
-  const left=r()<.5, fx=(left?.27:.73)+(r()-.5)*.06, fy=(left?.69:.72)+(r()-.5)*.03;
-  const s={fx,fy,bx:.08+r()*.84,by:.2+r()*.4,vx:(r()*2-1)*.15,vy:(r()*2-1)*.08,energy:.2+r()*.8,wind:r()*2-1};
-  const tx=left?.73:.27, ty=left?.72:.69;
-  const distances=actions.map((_,a)=> {let d=Infinity; for(let i=1;i<=10;i++){const p=i/12,t=p*durations[a];d=Math.min(d,Math.hypot(fx+(tx-fx)*p-clamp(s.bx+s.vx*t,.04,.96),fy+(ty-fy)*p-Math.sin(Math.PI*p)*(heights[a]+.018)-.025-clamp(s.by+s.vy*t,.12,.65)));} return d;});
+  const top=.50+r()*.10, bottom=.88+r()*.08;
+  const left=r()<.5;
+  const fx=left?.20+r()*.25:.55+r()*.25, tx=left?.55+r()*.25:.20+r()*.25;
+  const fy=top+.04+r()*(bottom-top-.08), ty=top+.04+r()*(bottom-top-.08);
+  const s={fx,fy,tx,ty,sf:perspective(fy,top,bottom),st:perspective(ty,top,bottom),bx:.06+r()*.88,by:.15+r()*.5,vx:(r()*2-1)*.15,vy:(r()*2-1)*.08,energy:.2+r()*.8,wind:r()*2-1};
+  const distances=actions.map((_,a)=> {let d=Infinity; for(let i=1;i<=10;i++){const p=i/12,t=p*durations[a],sc=s.sf+(s.st-s.sf)*p;d=Math.min(d,Math.hypot(fx+(tx-fx)*p-clamp(s.bx+s.vx*t,.04,.96),fy+(ty-fy)*p-Math.sin(Math.PI*p)*(heights[a]+.018)*sc-.025-clamp(s.by+s.vy*t,.12,.65)));} return d;});
   // Retain states with at least one arc within the teacher's catch neighborhood.
   if(Math.min(...distances)>.13) continue;
   const y=distances.indexOf(Math.min(...distances)); out.push({x:encode(s),y});
  }
  return out;
 }
-const config={trainSeed:1724,testSeed:90421,weightSeed:731,trainCount:18000,testCount:4000,epochs:90,learningRate:.025};
+const config={trainSeed:1724,testSeed:90421,weightSeed:731,trainCount:24000,testCount:4000,epochs:90,learningRate:.02};
 const train=dataset(config.trainSeed,config.trainCount), test=dataset(config.testSeed,config.testCount), r=rng(config.weightSeed);
-const w=Array.from({length:96},()=> (r()*2-1)*.25), b=Array(12).fill(0), v=Array.from({length:36},()=> (r()*2-1)*.25), c=Array(3).fill(0);
-function forward(x){const h=b.map((z,j)=>Math.tanh(z+x.reduce((s,q,i)=>s+q*w[j*8+i],0)));const z=c.map((q,k)=>q+h.reduce((s,t,j)=>s+t*v[k*12+j],0)); const m=Math.max(...z), e=z.map(q=>Math.exp(q-m)), total=e.reduce((a,b)=>a+b); return {h,p:e.map(q=>q/total)};}
+const w=Array.from({length:IN*H},()=> (r()*2-1)*.25), b=Array(H).fill(0), v=Array.from({length:OUT*H},()=> (r()*2-1)*.25), c=Array(OUT).fill(0);
+function forward(x){const h=b.map((z,j)=>Math.tanh(z+x.reduce((s,q,i)=>s+q*w[j*IN+i],0)));const z=c.map((q,k)=>q+h.reduce((s,t,j)=>s+t*v[k*H+j],0)); const m=Math.max(...z), e=z.map(q=>Math.exp(q-m)), total=e.reduce((a,b)=>a+b); return {h,p:e.map(q=>q/total)};}
 for(let epoch=0;epoch<config.epochs;epoch++) {
  for(let i=train.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[train[i],train[j]]=[train[j],train[i]];}
  const lr=config.learningRate/(1+epoch/45);
- for(const {x,y} of train){const {h,p}=forward(x), d=p.map((q,k)=>q-(k===y?1:0));const dh=h.map((q,j)=>(1-q*q)*d.reduce((s,t,k)=>s+t*v[k*12+j],0));for(let k=0;k<3;k++){c[k]-=lr*d[k];for(let j=0;j<12;j++)v[k*12+j]-=lr*d[k]*h[j];}for(let j=0;j<12;j++){b[j]-=lr*dh[j];for(let i=0;i<8;i++)w[j*8+i]-=lr*dh[j]*x[i];}}
+ for(const {x,y} of train){const {h,p}=forward(x), d=p.map((q,k)=>q-(k===y?1:0));const dh=h.map((q,j)=>(1-q*q)*d.reduce((s,t,k)=>s+t*v[k*H+j],0));for(let k=0;k<OUT;k++){c[k]-=lr*d[k];for(let j=0;j<H;j++)v[k*H+j]-=lr*d[k]*h[j];}for(let j=0;j<H;j++){b[j]-=lr*dh[j];for(let i=0;i<IN;i++)w[j*IN+i]-=lr*dh[j]*x[i];}}
 }
 // Evaluate the exact rounded constants exported to Dart, with no test-driven tuning.
 for(const a of [w,b,v,c]) for(let i=0;i<a.length;i++)a[i]=Number(a[i].toFixed(6));
-const confusion=Array.from({length:3},()=>[0,0,0]); let correct=0;
+const confusion=Array.from({length:OUT},()=>Array(OUT).fill(0)); let correct=0;
 for(const {x,y} of test){const {p}=forward(x), pred=p.indexOf(Math.max(...p));confusion[y][pred]++;correct+=pred===y;}
 const counts=confusion.map(row=>row.reduce((a,b)=>a+b)), payload=JSON.stringify({w,b,v,c});
+const parameters=IN*H+H+OUT*H+OUT;
 const dart=`// Generated by node scripts/train-policy.mjs; do not edit weights.
 import 'dart:math' as math;
 
 /// Synthetic geometric imitation prior; the caller retains timing and safety.
+/// Depth-aware: it sees the target pad and the perspective at both ends.
 class JumpPolicy {
   static const actions = ['tap', 'low', 'high'];
+  static const int inputs = ${IN};
+  static const int hidden = ${H};
   static double _clip(double x) => x.clamp(-1.0, 1.0).toDouble();
   static List<double> encode({required double frogX, required double frogY,
     required double bugX, required double bugY, required double bugVx,
-    required double bugVy, required double energy, required double wind}) {
-    final raw = [frogX, frogY, bugX, bugY, bugVx, bugVy, energy, wind];
-    if (raw.any((x) => !x.isFinite)) return List.filled(8, double.nan);
-    return [(frogX-.5)/.5, (frogY-.7)/.1, (bugX-frogX)/.7,
-      (frogY-bugY)/.6, bugVx/.15, bugVy/.08, 2*energy-1, wind]
+    required double bugVy, required double energy, required double wind,
+    required double targetX, required double targetY,
+    required double scaleFrom, required double scaleTo}) {
+    final raw = [frogX, frogY, bugX, bugY, bugVx, bugVy, energy, wind,
+      targetX, targetY, scaleFrom, scaleTo];
+    if (raw.any((x) => !x.isFinite)) return List.filled(inputs, double.nan);
+    return [(frogX-.5)/.5, (frogY-.75)/.2, (bugX-frogX)/.7,
+      (frogY-bugY)/.6, bugVx/.15, bugVy/.08, 2*energy-1, wind,
+      (targetX-frogX)/.7, (targetY-frogY)/.3, (scaleFrom-.8)/.25,
+      (scaleTo-.8)/.25]
       .map(_clip).toList();
   }
   static String suggest({required double frogX, required double frogY,
     required double bugX, required double bugY, required double bugVx,
-    required double bugVy, required double energy, required double wind}) =>
+    required double bugVy, required double energy, required double wind,
+    required double targetX, required double targetY,
+    required double scaleFrom, required double scaleTo}) =>
     choose(encode(frogX: frogX, frogY: frogY, bugX: bugX, bugY: bugY,
-      bugVx: bugVx, bugVy: bugVy, energy: energy, wind: wind));
+      bugVx: bugVx, bugVy: bugVy, energy: energy, wind: wind,
+      targetX: targetX, targetY: targetY, scaleFrom: scaleFrom,
+      scaleTo: scaleTo));
   static String choose(List<double> features) {
     final p = scores(features);
     var best = 0;
@@ -62,18 +82,18 @@ class JumpPolicy {
   }
   /// Probabilities in tap/low/high order. Invalid input falls back to low.
   static List<double> scores(List<double> features) {
-    if (features.length!=8 || features.any((x)=>!x.isFinite)) { return [0,1,0]; }
+    if (features.length!=inputs || features.any((x)=>!x.isFinite)) { return [0,1,0]; }
     final x=features.map(_clip).toList();
-    final h=List<double>.generate(12, (j) {
+    final h=List<double>.generate(hidden, (j) {
       var z=_b[j];
-      for(var i=0;i<8;i++) { z+=x[i]*_w[j*8+i]; }
+      for(var i=0;i<inputs;i++) { z+=x[i]*_w[j*inputs+i]; }
       // Stable tanh without an external runtime.
       final e=math.exp(-2*z.abs());
       return (z<0 ? -1.0 : 1.0)*(1-e)/(1+e);
     });
     final z=List<double>.generate(3,(k) {
       var s=_c[k];
-      for(var j=0;j<12;j++) { s+=h[j]*_v[k*12+j]; }
+      for(var j=0;j<hidden;j++) { s+=h[j]*_v[k*hidden+j]; }
       return s;
     });
     if (z.any((x)=>!x.isFinite)) return [0,1,0];
@@ -88,6 +108,6 @@ ${[['w',w],['b',b],['v',v],['c',c]].map(([n,a])=>`  static const _${n} = <double
 if(Buffer.byteLength(payload)>=5000)throw Error('Weight budget exceeded');
 mkdirSync(root+'assets/policy',{recursive:true});
 writeFileSync(root+'lib/game/jump_policy.dart',dart);
-const manifest={schemaVersion:1,kind:'synthetic imitation action prior',architecture:[8,12,3],activation:'tanh / softmax',actions,parameters:147,weightDecimals:6,weightPayloadBytes:Buffer.byteLength(payload),runtime:'Dart core only; weights compiled into jump_policy.dart',training:config,teacher:{durations,heights,samples:10,phaseDenominator:12,reachableDistance:.13},heldOut:{correct,total:test.length,accuracy:correct/test.length,majorityBaseline:Math.max(...counts)/test.length,confusionRowsTeacherColumnsPrediction:confusion},parityCases:test.slice(0,5).map(({x})=>({features:x,scores:forward(x).p}))};
+const manifest={schemaVersion:2,kind:'synthetic imitation action prior (depth-aware)',architecture:[IN,H,OUT],activation:'tanh / softmax',actions,parameters,weightDecimals:6,weightPayloadBytes:Buffer.byteLength(payload),runtime:'Dart core only; weights compiled into jump_policy.dart',training:config,teacher:{durations,heights,samples:10,phaseDenominator:12,reachableDistance:.13,perspective:'.56 + .48 * depth, linear along the ground',basinTop:[.5,.6],basinBottom:[.88,.96]},heldOut:{correct,total:test.length,accuracy:correct/test.length,majorityBaseline:Math.max(...counts)/test.length,confusionRowsTeacherColumnsPrediction:confusion},parityCases:test.slice(0,5).map(({x})=>({features:x,scores:forward(x).p}))};
 writeFileSync(root+'assets/policy/manifest.json',JSON.stringify(manifest,null,2)+'\n');
-console.log(JSON.stringify(manifest,null,2));
+console.log(JSON.stringify({parameters,payload:Buffer.byteLength(payload),heldOut:manifest.heldOut},null,1));

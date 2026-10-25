@@ -31,7 +31,7 @@ and the original construction page. No PWA service worker is registered.
 [Audio provenance](docs/audio.md)
 
 The browser game occupies a widescreen landscape frame (`641:359` prime logical
-canvas backed by `2557 × 1439` prime scenic exports and `1031 × 521` multi-pose
+canvas backed by `2752 × 1536` scenic exports (exactly 2× their source art) and `1031 × 521` multi-pose
 frog sprite sheets) across seven seeded biomes (`willow`, `blossom`, `cypress`,
 `maple`, `sanctuary`, `grotto`, and `alpine`). Native builds request landscape
 orientation. The current synthesized soundscape targets browsers; native

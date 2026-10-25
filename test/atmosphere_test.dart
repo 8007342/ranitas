@@ -345,8 +345,8 @@ void main() {
       );
       final maskName = 'emissive-${probe.backdropAsset}';
       final mask = await _loadAssetImage('assets/images/$maskName');
-      expect(mask.width, 2557);
-      expect(mask.height, 1439);
+      expect(mask.width, 2752);
+      expect(mask.height, 1536);
       final renderer = PondRenderer()
         ..backdrop = backdrop
         ..emissive = mask;
