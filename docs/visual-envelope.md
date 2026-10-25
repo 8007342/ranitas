@@ -126,10 +126,10 @@ questions below have been renumbered.
 | Q10 | Integer re-export | Deferred; requested in the asset list |
 | Q11 | Drift amount | **Decided: small roam, all pads.** Hero sections 10–14 px, ambient 4–10 px; ripples, koi and pad wakes push every pad |
 | Q12 | Pads carry frogs | **Decided:** yes; roaming continues through sleep and the sleeping frogs ride their leaves |
-| Q13 | Counts and sizes | 2 hero (base radius 30–40 px) + 5–9 ambient (9.5–21 px) |
+| Q13 | Counts and sizes | 2 hero (base radius 30–40 px) + 4–9 ambient (9.5–21 px, about one in ten 21–28 px); **Decided (2026-10-25):** about one world in four adds a decorative 42–54 px super pad behind the heroes |
 | Q14 | Occlusion | Pads never overlap; frogs depth-sort with pads |
-| Q15 | Yaw | Veins and lotus only |
-| Q16 | Frog scale | Scales with depth, quantised to 1/16 |
+| Q15 | Yaw | **Decided (2026-10-25):** real in-plane rotation; the slit is a see-through gap; pads turn on current shear, ripples, koi and hops (design D6 "As implemented") |
+| Q16 | Frog scale | **Decided (2026-10-25):** continuous along the arc, sprite snapped to whole pixels (design D7 "As implemented") |
 | Q17 | Depth-jump targets | Hero pads are seeded at different depths, so ordinary jumps gain depth |
 | Q18 | JEV retraining | Not needed now; optional polish |
 | Q19 | Sheet re-quantisation | **Decided:** request regenerated assets on a true pixel grid as needed (`art/ASSET_REQUESTS.md`) |

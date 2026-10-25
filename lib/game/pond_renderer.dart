@@ -79,6 +79,103 @@ class PondRenderer {
     }
   }
 
+  /// Scanline oval with the pad's radial slit left unpainted, so the water,
+  /// ripples and fish beneath show through the gap. Each row is split around
+  /// the slit's column interval; [lens] (an optional second oval centre
+  /// offset in y with the same radii) clips the row to both ovals, which
+  /// draws the floor of an upturned-rim pad behind its near rim.
+  void _ovalCut(
+    ui.Canvas c,
+    double x,
+    double y,
+    double rx,
+    double ry,
+    int color,
+    double opacity,
+    _Slit slit, {
+    double? lens,
+  }) {
+    if (rx <= 0 || ry <= 0 || opacity <= 0) return;
+    _paint.color = ui.Color(color).withValues(alpha: opacity.clamp(0.0, 1.0));
+    final gaps = <double>[0, 0, 0, 0];
+    for (var row = -ry.floor(); row <= ry.floor(); row++) {
+      var span = rx * math.sqrt(math.max(0, 1 - row * row / (ry * ry)));
+      if (lens != null) {
+        final shifted = row + lens;
+        span = math.min(
+          span,
+          rx * math.sqrt(math.max(0, 1 - shifted * shifted / (ry * ry))),
+        );
+      }
+      if (span <= 0) continue;
+      final rowY = (y + row).roundToDouble();
+      final left = (x - span).roundToDouble();
+      final right = left + (span * 2).ceilToDouble();
+      final n = slit.gapsOnRow(rowY, left, right, gaps);
+      var cursor = left;
+      for (var g = 0; g < n; g++) {
+        final lo = gaps[g * 2];
+        final hi = gaps[g * 2 + 1];
+        if (lo > cursor) {
+          c.drawRect(ui.Rect.fromLTRB(cursor, rowY, lo, rowY + 1), _paint);
+        }
+        cursor = math.max(cursor, hi);
+      }
+      if (right > cursor) {
+        c.drawRect(ui.Rect.fromLTRB(cursor, rowY, right, rowY + 1), _paint);
+      }
+    }
+  }
+
+  /// One-pixel line that leaves the slit wedge unpainted (veins and ribs).
+  void _lineCut(
+    ui.Canvas c,
+    double x,
+    double y,
+    double tx,
+    double ty,
+    int color,
+    double opacity,
+    _Slit slit,
+  ) {
+    final steps = math.max((tx - x).abs(), (ty - y).abs()).ceil();
+    for (var i = 0; i <= steps; i++) {
+      final p = steps == 0 ? 0.0 : i / steps;
+      final px = (x + (tx - x) * p).roundToDouble();
+      final py = (y + (ty - y) * p).roundToDouble();
+      if (slit.contains(px, py)) continue;
+      _rect(c, px, py, 1, 1, color, opacity);
+    }
+  }
+
+  /// Screen point at [fraction] of the pad radius along its slit centreline,
+  /// for a pad whose body centre is drawn at ([cx], [cy]).
+  static (double, double) slitPoint(
+    PadState pad,
+    double cx,
+    double cy,
+    double fraction,
+  ) {
+    final theta = pad.slitAngle;
+    return (
+      cx + math.cos(theta) * pad.radiusX * fraction,
+      cy + math.sin(theta) * pad.radiusY * fraction,
+    );
+  }
+
+  /// Paints one lily pad with its body centre at ([x], [y]) before drift and
+  /// dip; exposed for pixel checks of the see-through slit.
+  void drawPad(
+    ui.Canvas c,
+    PadState pad,
+    double x,
+    double y, {
+    double t = 0,
+    double motion = 0,
+    String biome = 'willow',
+    double depth = 1,
+  }) => _pad(c, pad, x, y, t, motion, biome, depth);
+
   void _ovalRing(
     ui.Canvas c,
     double x,
@@ -770,10 +867,26 @@ class PondRenderer {
     );
     final padRim = hazed(0xff143e3a);
     final veinColor = isGrotto ? 0xff92efe3 : 0xffb7cd86;
-    final yaw = pad.yaw;
 
-    // 1. Subsurface pad shadow (expands slightly when pad dips into water)
-    _oval(
+    // The pad turns in its own plane: the slit, veins, rim notch and lotus
+    // anchor all sit at pad-plane angles offset by the yaw and project through
+    // (cos θ · rx, sin θ · ry). The slit is a real gap in every scanline fill,
+    // so the water and the fish beneath show through it.
+    final theta = pad.slitAngle;
+    final foldCompressX = fold * 2.8 * scaleRatio;
+    final bodyCenterX = px - foldSide * foldCompressX * .5;
+    final bodyRx = math.max(3.5, rx - foldCompressX * .5);
+    final slitHalf = pad.isSuper ? .085 : .11;
+    final slit = _Slit(bodyCenterX, py, theta, slitHalf, bodyRx, ry, .12);
+    double angleGap(double phi) {
+      var d = (phi - theta) % (math.pi * 2);
+      if (d > math.pi) d -= math.pi * 2;
+      return d.abs();
+    }
+
+    // 1. Subsurface pad shadow (expands slightly when pad dips into water);
+    //    light falls through the same gap, so the shadow shares the wedge.
+    _ovalCut(
       c,
       px,
       py + 4 * scaleRatio - pad.dipY * .3,
@@ -781,100 +894,83 @@ class PondRenderer {
       ry + 1,
       0xff092d3d,
       .44,
+      slit,
     );
 
-    // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
-    final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
-    if (rimLift > 0.5) {
-      final liftedSide = tilt >= 0 ? -1.0 : 1.0;
-      _oval(
-        c,
-        px + liftedSide * 2.2 * scaleRatio,
-        py + 2.0 * scaleRatio,
-        rx - 1,
-        ry,
-        0xff6b3a50,
-        (rimLift / 3.5).clamp(0.35, 0.92),
-      );
-    }
-
-    // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
-    final foldCompressX = fold * 2.8 * scaleRatio;
-    final bodyCenterX = px - foldSide * foldCompressX * .5;
-    final bodyRx = math.max(3.5, rx - foldCompressX * .5);
-    _oval(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, padRim);
-    _oval(c, bodyCenterX, py, bodyRx, ry, padMid);
-    if (bodyRx > 6 && ry > 3.2) {
-      _oval(
-        c,
-        bodyCenterX - 2.5 * scaleRatio,
-        py - 1.5 * scaleRatio + tilt * 3 * scaleRatio,
-        bodyRx - 3.5 * scaleRatio,
-        math.max(1.5, ry - 1.8 * scaleRatio),
-        padLight,
-      );
-    }
-
-    // 4. Center water-cup depression when frog lands in Zone A (center)
-    if (pad.dipY > 1.0 && fold < 0.35) {
-      final cupAlpha = ((pad.dipY - 1.0) / 3.5).clamp(0.0, 0.55);
-      _oval(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58, cupAlpha);
-    }
-
-    // 5. Radial leaf veins & V-notch. Veins and the notch rotate with the
-    //    pad's slow yaw (scanline ovals cannot), fanned around the ellipse.
-    if (scaleRatio > 0.55) {
-      _line(
-        c,
-        bodyCenterX - bodyRx + 5 * scaleRatio,
-        py - 3 * scaleRatio,
-        bodyCenterX - 6 * scaleRatio,
-        py - ry + 1,
-        0xff90bc84,
-        .8,
-      );
-      for (var i = -3; i <= 3; i++) {
-        final phi = -math.pi / 2 + i * .27 + yaw;
-        _line(
+    if (pad.isSuper) {
+      _superPadBody(c, pad, px, py, bodyRx, ry, scaleRatio, depth, slit, theta,
+          hazed, angleGap);
+    } else {
+      // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
+      final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
+      if (rimLift > 0.5) {
+        final liftedSide = tilt >= 0 ? -1.0 : 1.0;
+        _ovalCut(
           c,
-          bodyCenterX,
-          py + 1,
-          bodyCenterX + math.cos(phi) * (bodyRx - 2 * scaleRatio),
-          py + 1 + math.sin(phi) * (ry - 1) + i * tilt * 2.5,
-          veinColor,
-          .28,
+          px + liftedSide * 2.2 * scaleRatio,
+          py + 2.0 * scaleRatio,
+          rx - 1,
+          ry,
+          0xff6b3a50,
+          (rimLift / 3.5).clamp(0.35, 0.92),
+          slit,
         );
       }
-    }
-    final notch = .35 + yaw;
-    _line(
-      c,
-      bodyCenterX,
-      py + 1,
-      bodyCenterX + math.cos(notch) * (bodyRx - 1),
-      py + 1 + math.sin(notch) * (ry - 1),
-      0xff153f42,
-      1,
-      scaleRatio > 0.65 ? 2 : 1,
-    );
-    if (scaleRatio > 0.5) {
-      _line(
-        c,
-        bodyCenterX + 1,
-        py + 2,
-        bodyCenterX + 1 + math.cos(notch) * (bodyRx - 3),
-        py + 2 + math.sin(notch) * (ry - 2),
-        0xff67a47b,
-      );
-      _rect(
-        c,
-        bodyCenterX - bodyRx + 7 * scaleRatio,
-        py + 1.5 * scaleRatio,
-        7 * scaleRatio,
-        1,
-        0xff94c195,
-        .65,
-      );
+
+      // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
+      _ovalCut(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, padRim, 1, slit);
+      _ovalCut(c, bodyCenterX, py, bodyRx, ry, padMid, 1, slit);
+      if (bodyRx > 6 && ry > 3.2) {
+        _ovalCut(
+          c,
+          bodyCenterX - 2.5 * scaleRatio,
+          py - 1.5 * scaleRatio + tilt * 3 * scaleRatio,
+          bodyRx - 3.5 * scaleRatio,
+          math.max(1.5, ry - 1.8 * scaleRatio),
+          padLight,
+          1,
+          slit,
+        );
+      }
+
+      // 4. Center water-cup depression when frog lands in Zone A (center)
+      if (pad.dipY > 1.0 && fold < 0.35) {
+        final cupAlpha = ((pad.dipY - 1.0) / 3.5).clamp(0.0, 0.55);
+        _ovalCut(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58,
+            cupAlpha, slit);
+      }
+
+      // 5. Radial leaf veins, eight around the pad plane turning with it,
+      //    none inside the slit; the lit streak stays on the sunward side and
+      //    is skipped while the slit points that way.
+      if (scaleRatio > 0.55) {
+        for (var k = 0; k < 8; k++) {
+          final phi = theta + (k + .5) * math.pi / 4;
+          final reach = bodyRx - 2 * scaleRatio;
+          final lift = math.cos(phi) * reach * math.sin(tilt) * .38;
+          _lineCut(
+            c,
+            bodyCenterX + math.cos(phi) * reach * .18,
+            py + 1 + math.sin(phi) * (ry - 1) * .18,
+            bodyCenterX + math.cos(phi) * reach,
+            py + 1 + math.sin(phi) * (ry - 1) + lift,
+            veinColor,
+            .28,
+            slit,
+          );
+        }
+      }
+      if (scaleRatio > 0.5 && angleGap(math.pi) > .6) {
+        _rect(
+          c,
+          bodyCenterX - bodyRx + 7 * scaleRatio,
+          py + 1.5 * scaleRatio,
+          7 * scaleRatio,
+          1,
+          0xff94c195,
+          .65,
+        );
+      }
     }
 
     // 6. Edge-Fold Deformation & Water-Wash Tongue (Zone C Edge Landing)
@@ -924,7 +1020,7 @@ class PondRenderer {
     // 8. Companion floating water lotus bloom beside pad 0 or lotus-bearing ambient pads
     if (pad.index == 0 || pad.hasLotus) {
       final bScale = pad.isAmbient ? (scaleRatio * 1.15).clamp(0.55, 0.95) : 1.0;
-      final orbit = math.pi + yaw * .5;
+      final orbit = math.pi + pad.yaw;
       final lx =
           px + math.cos(orbit) * (rx + 8 * bScale) + math.sin(t * .5) * 1.2 * motion;
       final ly =
@@ -934,6 +1030,115 @@ class PondRenderer {
       _oval(c, lx + 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
       _oval(c, lx, ly - 1 * bScale, 4 * bScale, 3 * bScale, 0xfffad2e1, .95);
       _rect(c, lx - 1, ly - 1, 2, 2, 0xffffd966, .95);
+    }
+  }
+
+  /// Body of a Victoria-style super pad: a flat floor inside an upturned rim.
+  /// The rim top is the floor ellipse raised by [h]; its outer wall shows as
+  /// a plum crescent on the near side and its inner wall as a dark crescent on
+  /// the far side. The floor is the lens of the floor ellipse and the rim's
+  /// inner ellipse, so the near rim hides the floor behind it. The slit cuts
+  /// through rim and floor alike, a notch that turns with the pad.
+  void _superPadBody(
+    ui.Canvas c,
+    PadState pad,
+    double px,
+    double py,
+    double rx,
+    double ry,
+    double scaleRatio,
+    double depth,
+    _Slit slit,
+    double theta,
+    int Function(int) hazed,
+    double Function(double) angleGap,
+  ) {
+    final sr = scaleRatio.clamp(.6, 1.15);
+    final h = (1.6 + 1.6 * depth) * sr;
+    final wallT = 2.4 * sr;
+    final aspect = ry / rx;
+    final floorRx = math.max(3.0, rx - wallT);
+    final floorRy = math.max(1.5, ry - wallT * aspect);
+    final wall = hazed(0xff7a3d52);
+    final lip = hazed(0xffa0c66f);
+    final rimTop = hazed(0xff6faa64);
+    final innerWall = hazed(0xff1d5247);
+    final floor = hazed(0xff4f9a6e);
+    final floorLight = hazed(0xff69b07a);
+    final rib = hazed(0xff2f6b55);
+
+    _ovalCut(c, px, py, rx, ry, wall, 1, slit);
+    _ovalCut(c, px, py - h, rx, ry, rimTop, 1, slit);
+    _ovalCut(c, px, py - h, floorRx, floorRy, innerWall, 1, slit);
+    _ovalCut(c, px, py, floorRx, floorRy, floor, 1, slit, lens: h);
+    if (floorRx > 8) {
+      _ovalCut(
+        c,
+        px - 2 * sr,
+        py - sr,
+        floorRx - 3 * sr,
+        math.max(1.0, floorRy - 1.5 * sr),
+        floorLight,
+        1,
+        slit,
+        lens: h - sr,
+      );
+    }
+
+    // Prominent radial ribs, shortened on the near half so they stop at the
+    // rim instead of running onto it.
+    const ribs = 12;
+    for (var k = 0; k < ribs; k++) {
+      final phi = theta + (k + .5) * math.pi * 2 / ribs;
+      final sinP = math.sin(phi);
+      final fullY = sinP * floorRy * .94;
+      // Shorten the whole rib, not just its y, so it keeps its direction and
+      // never sweeps into the slit.
+      final f = sinP > 0 && fullY > 0
+          ? (math.max(0.0, fullY - h - 1) / fullY)
+          : 1.0;
+      final reachY = fullY * f;
+      final reachX = math.cos(phi) * floorRx * .94 * f;
+      _lineCut(
+        c,
+        px + reachX * .14,
+        py + reachY * .14,
+        px + reachX,
+        py + reachY,
+        rib,
+        .4,
+        slit,
+      );
+    }
+
+    // Sunlit lip along the far half of the rim and a shadow line under the
+    // near wall, both skipping the notch.
+    final steps = math.max(12, (rx * 1.2).round());
+    for (var i = 0; i <= steps; i++) {
+      final phi = math.pi + i / steps * math.pi;
+      if (angleGap(phi) < slit.halfAngle + .08) continue;
+      _rect(
+        c,
+        px + math.cos(phi) * (rx - .5),
+        py - h + math.sin(phi) * ry,
+        1,
+        1,
+        lip,
+        .85,
+      );
+    }
+    for (var i = 0; i <= steps; i++) {
+      final phi = i / steps * math.pi;
+      if (angleGap(phi) < slit.halfAngle + .08) continue;
+      _rect(
+        c,
+        px + math.cos(phi) * (rx - .5),
+        py + math.sin(phi) * ry,
+        1,
+        1,
+        0xff3a1a2c,
+        .6,
+      );
     }
   }
 
@@ -1230,4 +1435,96 @@ class PondRenderer {
 class _Mote {
   const _Mote(this.x, this.y, this.z, this.w);
   final double x, y, z, w;
+}
+
+/// A lily pad's radial V-slit projected to the screen. The pad is a near
+/// circle in its own plane; a pad-plane angle `θ` maps to the screen offset
+/// `(cos θ · rx, sin θ · ry)`, and the affine map keeps rays straight, so the
+/// slit stays a wedge between two rays from the centre. A small disc at the
+/// centre, where the lobes join at the stem, is never cut.
+class _Slit {
+  _Slit(
+    this.cx,
+    this.cy,
+    double theta,
+    this.halfAngle,
+    double rx,
+    double ry,
+    double inner,
+  ) : r1x = math.cos(theta - halfAngle) * rx,
+      r1y = math.sin(theta - halfAngle) * ry,
+      r2x = math.cos(theta + halfAngle) * rx,
+      r2y = math.sin(theta + halfAngle) * ry,
+      innerRx = rx * inner,
+      innerRy = math.max(.5, ry * inner) {
+    sign = (r1x * r2y - r1y * r2x) >= 0 ? 1.0 : -1.0;
+  }
+
+  final double cx, cy;
+  final double halfAngle;
+  final double r1x, r1y, r2x, r2y;
+  final double innerRx, innerRy;
+  late final double sign;
+
+  /// Whether the pixel at ([px], [py]) lies in the wedge outside the stem
+  /// disc, for lines that must not paint over the gap.
+  bool contains(double px, double py) {
+    final dx = px + .5 - cx;
+    final dy = py + .5 - cy;
+    if (sign * (r1x * dy - r1y * dx) < 0) return false;
+    if (sign * (dx * r2y - dy * r2x) < 0) return false;
+    final u = dx / innerRx;
+    final v = dy / innerRy;
+    return u * u + v * v >= 1;
+  }
+
+  /// Writes up to two `[lo, hi)` column gaps on pixel row [rowY] within
+  /// `[left, right)` into [out] (lo0, hi0, lo1, hi1) and returns how many.
+  int gapsOnRow(double rowY, double left, double right, List<double> out) {
+    final dy = rowY + .5 - cy;
+    var lo = double.negativeInfinity;
+    var hi = double.infinity;
+    // Inside the wedge: cross(r1, p) and cross(p, r2) share the wedge's sign.
+    for (var i = 0; i < 2; i++) {
+      final c = i == 0 ? -sign * r1y : sign * r2y;
+      final k = i == 0 ? sign * r1x * dy : -sign * dy * r2x;
+      if (c.abs() < 1e-9) {
+        if (k < 0) return 0;
+        continue;
+      }
+      final bound = -k / c;
+      if (c > 0) {
+        lo = math.max(lo, bound);
+      } else {
+        hi = math.min(hi, bound);
+      }
+    }
+    lo = math.max(lo, left - cx);
+    hi = math.min(hi, right - cx);
+    if (hi <= lo) return 0;
+    // Leave the stem disc whole: subtract its half-width on this row.
+    final innerHalf = dy.abs() < innerRy
+        ? innerRx * math.sqrt(math.max(0, 1 - dy * dy / (innerRy * innerRy)))
+        : 0.0;
+    var n = 0;
+    void emit(double a, double b) {
+      if (b <= a) return;
+      // The pixel under the wedge's centreline is always part of the gap, so
+      // a slit thinner than a pixel still reads as one unbroken cut.
+      final mid = (cx + (a + b) / 2).floorToDouble();
+      final colLo = math.min((cx + a).roundToDouble(), mid);
+      final colHi = math.max((cx + b).roundToDouble(), mid + 1);
+      if (colLo >= right || colHi <= left) return;
+      out[n * 2] = math.max(left, colLo);
+      out[n * 2 + 1] = math.min(right, colHi);
+      n++;
+    }
+    if (innerHalf <= 0) {
+      emit(lo, hi);
+    } else {
+      emit(lo, math.min(hi, -innerHalf));
+      emit(math.max(lo, innerHalf), hi);
+    }
+    return n;
+  }
 }

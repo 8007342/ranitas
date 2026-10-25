@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ranitas/game/pond_model.dart';
 
@@ -52,17 +54,16 @@ void main() {
     expect(frog.viewPose('landing'), 'landing');
   });
 
-  test('frog scale is quantised perspective at the ground point', () {
+  test('frog scale is the continuous perspective at the ground point', () {
     final m = PondModel(seed: 4);
     for (final frog in m.frogs) {
       final s = m.frogScale(frog);
-      expect(s * 16, (s * 16).roundToDouble());
-      expect(s, closeTo(m.perspectiveAt(frog.y * 359), 1 / 32 + 1e-9));
-      expect(s, inInclusiveRange(.5, 1.0625));
+      expect(s, m.perspectiveAt(frog.y * 359));
+      expect(s, inInclusiveRange(.56, 1.04));
     }
   });
 
-  test('jumping away shrinks monotonically and lands at the target scale; duration is unchanged', () {
+  test('jumping away shrinks smoothly, with no steps, and lands at the target scale; duration is unchanged', () {
     var away = 0;
     var toward = 0;
     for (var seed = 0; seed < 300 && (away < 5 || toward < 5); seed++) {
@@ -79,26 +80,37 @@ void main() {
         toward++;
       }
       var previous = m.frogScale(frog);
+      final start = previous;
       var frames = 0;
+      var largestStep = 0.0;
+      final distinct = <double>{previous};
       while (frog.airborne) {
         m.update(1 / 60);
         frames++;
         final s = m.frogScale(frog);
         if (farther) {
-          expect(s, lessThanOrEqualTo(previous), reason: 'seed=$seed');
+          expect(s, lessThanOrEqualTo(previous + 1e-9), reason: 'seed=$seed');
         } else {
-          expect(s, greaterThanOrEqualTo(previous), reason: 'seed=$seed');
+          expect(s, greaterThanOrEqualTo(previous - 1e-9), reason: 'seed=$seed');
         }
+        largestStep = max(largestStep, (s - previous).abs());
+        distinct.add(s);
         previous = s;
       }
       // Tap flights last 0.68 s whatever the depth change.
       expect(frames, inInclusiveRange(40, 42));
+      // Continuous: every frame moves the scale a little, never by a 1/16
+      // step; the change is spread evenly over the flight.
+      final total = (previous - start).abs();
+      expect(distinct.length, greaterThan(frames ~/ 2), reason: 'seed=$seed');
+      expect(largestStep, lessThan(total / 20 + 1e-6), reason: 'seed=$seed');
+      expect(largestStep, lessThan(1 / 16));
       // Landed at the target pad's scale (the perch sits up to 5 px off centre).
       expect(
         m.frogScale(frog),
-        closeTo(m.perspectiveAt(m.pads[1].y * 359), 1 / 16 + .03),
+        closeTo(m.perspectiveAt(m.pads[1].y * 359), .03),
       );
-      expect(m.frogScale(frog), closeTo(m.perspectiveAt(frog.y * 359), 1 / 32 + 1e-9));
+      expect(m.frogScale(frog), m.perspectiveAt(frog.y * 359));
     }
     expect(away, greaterThanOrEqualTo(5));
     expect(toward, greaterThanOrEqualTo(5));

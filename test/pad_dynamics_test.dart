@@ -39,7 +39,7 @@ void main() {
       for (final p in pads) {
         final px = p.x * 641;
         final py = p.y * 359;
-        expect(p.baseRx, inInclusiveRange(9.5, 40));
+        expect(p.baseRx, inInclusiveRange(9.5, p.isSuper ? 54 : 40));
         expect(py - p.radiusY, greaterThanOrEqualTo(a.basin.topY));
         expect(py + p.radiusY, lessThanOrEqualTo(a.basin.bottomY));
         expect(px - p.radiusX, greaterThanOrEqualTo(a.basin.leftX(py)));

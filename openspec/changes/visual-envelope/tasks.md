@@ -39,6 +39,14 @@
 - [x] 6.4 Whole-number scenic re-export (2752 × 1536) and regenerated emissive masks
 - [x] 6.5 Depth-aware JEV prior (12→16→3) retrained, plus patience when nothing is in reach
 
+## 7. Pad sizes, rotation and smooth frog scale (branch `work/pond-pads-rotation`)
+
+- [x] 7.1 Seeded size tiers: large ambient leaves (21–28 px) and an occasional decorative Victoria-style super pad behind the heroes, never overlapping, never in the jump lane
+- [x] 7.2 Real in-plane rotation: pad-plane yaw turns slit, veins, notch and lotus anchor; vorticity, seeded bias, ripple, koi and impact torques with angular drag; continues through sleep
+- [x] 7.3 See-through slit: scanline fills skip the slit wedge so water, ripples and koi show through; super pad rim and floor cut alike
+- [x] 7.4 Continuous frog scale along the arc with whole-pixel sprite snapping against shimmer
+- [x] 7.5 Tests: size distribution and super frequency over 300 seeds, no overlaps, slit pixel transparency, koi-under-slit frame, yaw bounds/smoothness/partition determinism, perched frog stays on a rotating pad, continuous monotone scale
+
 ## 5. Integration (branch `work/visual-envelope`)
 
 - [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
