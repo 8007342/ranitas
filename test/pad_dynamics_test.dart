@@ -147,8 +147,8 @@ void main() {
   });
 
   test('current is bounded, seeded and deterministic in time', () {
-    final m = PondModel(seed: 9);
-    final other = PondModel(seed: 10);
+    final m = PondModel(seed: 9)..elapsed = 180;
+    final other = PondModel(seed: 10)..elapsed = 180;
     var differs = false;
     for (final pad in allPads(m)) {
       final (cx, cy) = m.currentAt(pad);

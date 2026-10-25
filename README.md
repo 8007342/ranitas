@@ -21,6 +21,12 @@ For development: `flutter pub get`, then `flutter run -d web-server
 --web-hostname 0.0.0.0 --web-port 8080`. `flutter analyze` and `flutter test`
 validate the Dart code. `npm run check:assets` checks the deployment file budget.
 
+The pond begins silent and nearly still. The audio master fades in over ten
+seconds; scenery and sound layers arrive gradually over three minutes, leaving
+at least a final minute of fully awakened play before sleep. Escape or F exits
+page fullscreen; R refreshes into a new random pond. See the
+[quiet awakening design and research](docs/quiet-awakening.md).
+
 Workers custom domain: **ranitas.tlatoani.net** (Cloudflare authentication and
 zone access required). See [deployment](docs/deployment.md) for Workers, Pages,
 and the original construction page. No PWA service worker is registered.

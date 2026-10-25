@@ -11,6 +11,7 @@ extension type _RanitasAudio(JSObject _) implements JSObject {
     JSBoolean sleeping,
     JSNumber rainIntensity,
     JSString species,
+    JSNumber elapsedSeconds,
   );
   external void suspend();
   external void resume();
@@ -32,6 +33,7 @@ class PondAmbience {
     bool sleeping, {
     double rainIntensity = 0,
     String species = '',
+    double elapsedSeconds = 0,
   }) {
     if (_disposed) return;
     _audio?.update(
@@ -41,6 +43,7 @@ class PondAmbience {
       sleeping.toJS,
       rainIntensity.toJS,
       species.toJS,
+      elapsedSeconds.toJS,
     );
   }
 

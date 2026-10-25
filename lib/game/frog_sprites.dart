@@ -73,7 +73,7 @@ class FrogSprites {
         : 0.0;
 
     final x = (frog.x * 641 + padDx).roundToDouble();
-    final y = (frog.y * 359 + padDy).roundToDouble();
+    final y = (frog.y * 359 + 3 + padDy).roundToDouble();
     final sleeping = model.sleeping || frog.asleep;
     final charging =
         frog.index == 0 && model.pressing && !frog.airborne && !frog.swimming;
@@ -169,8 +169,22 @@ class FrogSprites {
     // 1. Water splash crown & ripples on belly flop or landing
     if (frog.bellyFlop > 0) {
       final spread = (1 - frog.bellyFlop) * 24;
-      oval(x, y + 3, (14 + spread) * s, 4 * s, 0xffb0d8d0, frog.bellyFlop * .32);
-      oval(x, y + 3, (9 + spread * .6) * s, 2 * s, 0xffe2f7f2, frog.bellyFlop * .45);
+      oval(
+        x,
+        y + 3,
+        (14 + spread) * s,
+        4 * s,
+        0xffb0d8d0,
+        frog.bellyFlop * .32,
+      );
+      oval(
+        x,
+        y + 3,
+        (9 + spread * .6) * s,
+        2 * s,
+        0xffe2f7f2,
+        frog.bellyFlop * .45,
+      );
       for (var i = 0; i < 8; i++) {
         final side = i.isEven ? 1.0 : -1.0;
         final arc = math.sin((1 - frog.bellyFlop) * math.pi);
@@ -203,7 +217,9 @@ class FrogSprites {
     } else {
       // Shadow always projects onto the pond/lily-pad ground plane (groundY),
       // never floating in the air with frog.y.
-      final groundY = frog.airborne ? (frog.groundY * 359).roundToDouble() : y;
+      final groundY = frog.airborne
+          ? (frog.groundY * 359).roundToDouble()
+          : y - 3;
       final altNorm = (frog.altitude / .41).clamp(0.0, 1.0);
       final overPad = model.pads.any(
         (p) => ((frog.x - p.x) * 641).abs() <= p.radiusX * .96,
@@ -310,8 +326,15 @@ class FrogSprites {
       const dstW = 42.0;
       const dstH = 36.0;
       final dst = ui.Rect.fromLTWH(-dstW / 2, -dstH + 5, dstW, dstH);
+      // Compose lids with the opaque sprite first, then fade/haze the whole
+      // character. Otherwise a second translucent pass brightens the eye and
+      // changes its alpha at distance while the rest of the frog stays dim.
+      canvas.saveLayer(
+        dst,
+        ui.Paint()..color = ui.Color.fromRGBO(255, 255, 255, opacityScale),
+      );
       paint
-        ..color = ui.Color.fromRGBO(255, 255, 255, opacityScale)
+        ..color = const ui.Color(0xffffffff)
         ..colorFilter = haze > 0
             ? ui.ColorFilter.mode(
                 hazeColor.withValues(alpha: haze),
@@ -320,6 +343,19 @@ class FrogSprites {
             : null
         ..filterQuality = ui.FilterQuality.none;
       canvas.drawImageRect(image, src, dst, paint);
+      if (identical(image, sheet) && !sleeping && !reducedMotion) {
+        _spriteBlink(
+          canvas,
+          frog,
+          model.time,
+          pose,
+          mid,
+          outline,
+          1,
+          paint.colorFilter,
+        );
+      }
+      canvas.restore();
       // The paint is shared with the rest of the renderer.
       paint
         ..colorFilter = null
@@ -349,20 +385,6 @@ class FrogSprites {
       }
     } else if (sheet != null) {
       drawCell(sheet, _cellForPose(pose));
-
-      _renderSpriteMicroExpressions(
-        rect: rect,
-        oval: oval,
-        frog: frog,
-        model: model,
-        pose: pose,
-        sleeping: sleeping,
-        reducedMotion: reducedMotion,
-        outline: outline,
-        mid: mid,
-        sacColor: sacColor,
-        cheekColor: cheekColor,
-      );
     } else {
       _renderProceduralPose(
         rect: rect,
@@ -399,7 +421,9 @@ class FrogSprites {
       }
     }
     if (sleeping) {
-      final rise = reducedMotion ? 0.0 : (model.time * .14 + frog.index * .4) % 1;
+      final rise = reducedMotion
+          ? 0.0
+          : (model.time * .14 + frog.index * .4) % 1;
       final a = reducedMotion ? .5 : math.sin(rise * math.pi) * .72;
       final zx = x + 15 * s;
       final zy = y - (24 + rise * 11) * s;
@@ -410,57 +434,85 @@ class FrogSprites {
     }
   }
 
-  static void _renderSpriteMicroExpressions({
-    required void Function(double, double, double, double, int, [double]) rect,
-    required void Function(double, double, double, double, int, [double]) oval,
-    required FrogState frog,
-    required PondModel model,
-    required String pose,
-    required bool sleeping,
-    required bool reducedMotion,
-    required int outline,
-    required int mid,
-    required int sacColor,
-    required int cheekColor,
-  }) {
-    if (pose == 'idle' || pose == 'charging' || pose == 'landing') {
-      // Discrete 1px internal under-chin vocal shimmer (strictly inside chin contour)
-      final vocalWave = reducedMotion
-          ? 0.0
-          : math.max(
-              0.0,
-              math.sin(model.time * 2.4 + frog.index * 2.2) - .45,
-            );
-      if (vocalWave > 0 && !sleeping && pose == 'idle') {
-        rect(1, -11, 3, 1, sacColor, vocalWave * .75);
-        rect(2, -10, 2, 1, 0xfffff9d6, vocalWave * .55);
+  /// Eye bounds are authored in the replacement atlas's 42 × 36 source grid,
+  /// not in the old procedural frog's coordinate system. No throat/cheek marks
+  /// are painted over sprites: those features already belong to each pose.
+  static List<ui.Rect> spriteEyes(String pose, int frogIndex) =>
+      switch ((pose, frogIndex)) {
+        ('idle', 0) => const [
+          ui.Rect.fromLTWH(22, 16, 5, 4),
+          ui.Rect.fromLTWH(34, 17, 2, 2),
+        ],
+        ('idle', _) => const [
+          ui.Rect.fromLTWH(23, 15, 5, 4),
+          ui.Rect.fromLTWH(34, 16, 2, 3),
+        ],
+        ('charging' || 'landing', 0) => const [
+          ui.Rect.fromLTWH(25, 19, 4, 3),
+          ui.Rect.fromLTWH(36, 20, 2, 2),
+        ],
+        ('charging' || 'landing', _) => const [
+          ui.Rect.fromLTWH(25, 18, 4, 4),
+          ui.Rect.fromLTWH(36, 18, 2, 3),
+        ],
+        ('swallowing', 0) => const [ui.Rect.fromLTWH(23, 12, 4, 3)],
+        ('swallowing', _) => const [ui.Rect.fromLTWH(23, 11, 4, 4)],
+        _ => const [],
+      };
+
+  static double blinkClosure(double time, int frogIndex) {
+    final phase = (time + frogIndex * 2.13) % 6.7;
+    final age = phase - 6.46;
+    if (age < 0) return 0;
+    if (age < .085) return math.sin(age / .085 * math.pi / 2);
+    if (age < .12) return 1;
+    return math.max(0, math.cos((age - .12) / .12 * math.pi / 2));
+  }
+
+  static void _spriteBlink(
+    ui.Canvas canvas,
+    FrogState frog,
+    double time,
+    String pose,
+    int skin,
+    int outline,
+    double opacity,
+    ui.ColorFilter? haze,
+  ) {
+    final closure = blinkClosure(time, frog.index);
+    if (closure <= 0) return;
+    final lid = ui.Paint()
+      ..isAntiAlias = false
+      ..colorFilter = haze;
+    for (final eye in spriteEyes(pose, frog.index)) {
+      // Importer packs each effective pixel as an exact 6 × 6 block, with
+      // 3/22 px cell padding. Apply the same source-to-destination transform.
+      final bounds = ui.Rect.fromLTWH(
+        -21 + (3 + eye.left * 6) / (1031 / 4) * 42,
+        -31 + (22 + eye.top * 6) / (521 / 2) * 36,
+        eye.width * 6 / (1031 / 4) * 42,
+        eye.height * 6 / (521 / 2) * 36,
+      );
+      canvas.save();
+      canvas.clipRect(bounds);
+      lid.color = ui.Color(skin).withValues(alpha: opacity);
+      canvas.drawRect(
+        ui.Rect.fromLTWH(
+          bounds.left,
+          bounds.top,
+          bounds.width,
+          bounds.height * closure,
+        ),
+        lid,
+      );
+      if (closure > .92) {
+        lid.color = ui.Color(outline).withValues(alpha: opacity);
+        canvas.drawRect(
+          ui.Rect.fromLTWH(bounds.left, bounds.center.dy, bounds.width, .7),
+          lid,
+        );
       }
-      // Natural eye blink on idle/charging poses
-      final blink =
-          !reducedMotion && ((model.time + frog.index * 1.7) % 5.8) > 5.62;
-      if (blink || sleeping) {
-        final ey = pose == 'idle' ? -21.0 : -18.0;
-        oval(0, ey, 4, 3, mid);
-        rect(-3, ey, 6, 1, outline);
-      }
-    } else if (pose == 'swallowing') {
-      // Discrete in-boundary swallow shimmer + contented happy eye squint (no protruding bulge)
-      final p = 1 - (frog.swallowTimer / .88).clamp(0.0, 1.0);
-      final gulpAlpha = math.sin(p * math.pi);
-      // Contented squinting eye arc
-      oval(0, -21, 3, 2, mid, .9);
-      rect(-2, -21, 4, 1, outline, .9);
-      // Subtle warm cheek blush
-      rect(-4, -15, 2, 1, cheekColor, .45 + gulpAlpha * .35);
-      // Tiny 2x1 internal throat highlight sliding down 2.5px inside chin contour
-      final shimmerY = -12.0 + p * 2.5;
-      rect(1, shimmerY, 2, 1, sacColor, gulpAlpha * .75);
-      rect(2, shimmerY, 1, 1, 0xfffff9d6, gulpAlpha * .65);
-      // Tiny vanishing wing tip at lip line at very start of swallow (p < 0.22)
-      if (p < .22) {
-        final wa = (1 - p / .22) * .75;
-        rect(4, -16, 2, 1, 0xffd4e5de, wa);
-      }
+      canvas.restore();
     }
   }
 
@@ -555,6 +607,7 @@ class FrogSprites {
       }
     }
   }
+
   /// Procedural back (`away_*`, `back_idle`) and front (`toward_*`) views in
   /// the same pixel-primitive style and palette as the side poses. Drawn in
   /// the frog's local space: feet on `y = 0`, facing right before mirroring.

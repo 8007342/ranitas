@@ -1,5 +1,12 @@
 # Ranitas Visual & Animation Styleguide (Landscape High-Res Edition)
 
+Current motion and lighting refinements are specified in
+[Quiet Awakening](../docs/quiet-awakening.md): source-aligned clipped blinks,
+centered foot-supported landings, anchored mineral/shore layers, continuous
+foliage transforms and grading, and a staggered three-minute entrance. These
+take precedence over older fast flutter, bright flip-frame and coarse rotation
+examples in the historical animation research below.
+
 ## 1. Canvas & Aspect Ratio Architecture
 
 Ranitas is designed for widescreen high-resolution displays in **landscape (~16:9)** orientation while preserving crisp, deliberate pixel-art scaling through prime-dimensioned surfaces:
@@ -11,7 +18,7 @@ Ranitas is designed for widescreen high-resolution displays in **landscape (~16:
 | **Frog Character Sprite Sheets** (`assets/images/frog-*-sheet.webp`) | `1031 × 521` | Both prime | `4 × 2` pose atlas | 8-pose reference & hybrid sprite atlas per frog |
 | **Logical Procedural Canvas** (`PondRenderer`) | `641 × 359` | Both prime | `1.7855:1` (~16:9) | Crisp pixel-art actor, water, motif, & weather canvas |
 
-- **Explicit Pixel Scaling**: All `Canvas.drawImageRect` and procedural primitives render with `FilterQuality.none` and `isAntiAlias = false`.
+- **Explicit Pixel Scaling**: Scenic, actor and mineral layers use nearest-neighbor sampling and hard pixel primitives. Moving leaf atlases and painted vegetation canopies use low texture filtering and continuous transforms so fractional movement does not pop between whole pixels or coarse rotation steps.
 - **Stage Layout in Normalized Coordinates `(0..1, 0..1)`**:
   - **Sky & Distant Horizon**: `y = 0.00 .. 0.40`
   - **Far Bank & Reflections**: `y = 0.36 .. 0.54`

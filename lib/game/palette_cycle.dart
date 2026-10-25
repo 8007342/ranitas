@@ -236,10 +236,25 @@ class PaletteCycle {
     final k = frameIndex(t, reducedMotion: reducedMotion);
     final f = frameFraction(t, reducedMotion: reducedMotion);
     _paint.blendMode = spec.additive ? ui.BlendMode.plus : ui.BlendMode.srcOver;
-    final firstAlpha = spec.additive ? (1 - f) * strength : strength;
-    _drawFrame(canvas, frames[k], firstAlpha);
-    if (f > 0) {
-      _drawFrame(canvas, frames[(k + 1) % frameCount], f * strength);
+    if (spec.additive) {
+      _drawFrame(canvas, frames[k], (1 - f) * strength);
+      if (f > 0) {
+        _drawFrame(canvas, frames[(k + 1) % frameCount], f * strength);
+      }
+    } else {
+      // Fade the completed interpolation once. Applying strength separately
+      // to two source-over frames changes their combined opacity with f,
+      // making the end of every cycle brighter than its first frame.
+      canvas.saveLayer(
+        spec.rect,
+        ui.Paint()
+          ..color = ui.Color.fromRGBO(255, 255, 255, strength.clamp(0, 1)),
+      );
+      _drawFrame(canvas, frames[k], 1);
+      if (f > 0) {
+        _drawFrame(canvas, frames[(k + 1) % frameCount], f);
+      }
+      canvas.restore();
     }
   }
 

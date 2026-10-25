@@ -77,7 +77,7 @@ void main() {
       final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final offset = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
-      expect(offset, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
+      expect(offset, inInclusiveRange(.0005 - 1e-9, .0021 + 1e-9));
     }
   });
 
@@ -120,7 +120,7 @@ void main() {
         expect(model.progress, greaterThanOrEqualTo(previousProgress));
         previousProgress = model.progress;
         if (model.windTell > 0) sawTell = true;
-        if (model.wind.abs() > .35) {
+        if (model.wind.abs() > .1) {
           expect(sawTell, isTrue);
           sawGust = true;
         }
@@ -128,9 +128,7 @@ void main() {
           model.frogs.where((f) => f.airborne || f.swimming).length,
           lessThanOrEqualTo(1),
         );
-        final a = model.frogs[0];
-        final b = model.frogs[1];
-        expect(sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2)), greaterThan(.025));
+        // Shared-pad silhouettes may overlap; support beats separation.
         for (final frog in model.frogs) {
           expect(frog.x, inInclusiveRange(0, 1));
           expect(frog.y, inInclusiveRange(0, 1));
@@ -440,7 +438,7 @@ void main() {
       final expectedX = model.pads[1].x + model.perchOffsetX(0, 1);
       final expectedY = model.pads[1].y;
       final radius = sqrt(pow(frog.x - expectedX, 2) + pow(frog.y - expectedY, 2));
-      expect(radius, inInclusiveRange(.005 - 1e-9, .015 + 1e-9));
+      expect(radius, inInclusiveRange(.0005 - 1e-9, .0021 + 1e-9));
       offsets.add(radius);
     }
     expect(offsets.length, 30);
@@ -455,6 +453,9 @@ void main() {
       ).firstWhere((m) => m.weather == 'drizzle' || m.weather == 'storm');
 
       expect(rainyModel.ambientPads.length, inInclusiveRange(5, 9));
+      expect(rainyModel.raindrops, isEmpty);
+      tap(rainyModel);
+      rainyModel.update(180);
       expect(rainyModel.raindrops, isNotEmpty);
 
       for (final p in [...rainyModel.pads, ...rainyModel.ambientPads]) {
@@ -492,7 +493,7 @@ void main() {
   });
 
   test(
-    'jump ground-plane shadow stays on pond plane and edge landing folds pad and emits ripples',
+    'jump ground-plane shadow stays on pond plane and center landing cups pad and emits ripples',
     () {
       final model = PondModel(seed: 14);
       final frog = model.frogs[0];
@@ -500,7 +501,7 @@ void main() {
       expect(model.koi.length, 4);
       expect(model.tadpoles.length, 6);
 
-      // Launch Frog 0 toward Pad 1 (visiting perch offset lands near the pad edge)
+      // Launch Frog 0 toward the safe central part of Pad 1.
       model.press();
       model.update(.35);
       model.release();
@@ -518,8 +519,9 @@ void main() {
       }
       expect(maxAltitude, greaterThan(.2));
       expect(frog.altitude, 0);
-      expect(model.pads[1].landingZone, anyOf('edge', 'mid'));
-      expect(model.pads[1].edgeFold, greaterThan(0));
+      expect(model.pads[1].landingZone, 'center');
+      expect(model.pads[1].edgeFold, 0);
+      expect(model.pads[1].dipVelocity, greaterThan(0));
       expect(model.ripples.length, greaterThanOrEqualTo(2));
       expect(
         model.koi.any((k) => k.startleTimer > 0),

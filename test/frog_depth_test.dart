@@ -66,7 +66,7 @@ void main() {
   test('jumping away shrinks smoothly, with no steps, and lands at the target scale; duration is unchanged', () {
     var away = 0;
     var toward = 0;
-    for (var seed = 0; seed < 300 && (away < 5 || toward < 5); seed++) {
+    for (var seed = 0; seed < 2000 && (away < 5 || toward < 5); seed++) {
       final m = PondModel(seed: seed);
       final frog = m.frogs[0];
       m.press();

@@ -8,7 +8,19 @@
   let unlockPointer = null, unlockKey = null, gestureEnded = false;
   let unlockPending = false, unlockAttempt = 0;
   let state = { progress: 0, richness: 0, weather: 'clear', sleeping: false,
-    rainIntensity: 0, species: {} };
+    rainIntensity: 0, species: {}, elapsedSeconds: 0 };
+  const reveal = (seconds, start, end) => {
+    const x = clamp((seconds - start) / (end - start));
+    return clamp(x * x * x * (x * (x * 6 - 15) + 10));
+  };
+  // Volume fade and orchestration are separate. A full master at 10 s does
+  // not imply a full soundscape: the last layers finish entering at 180 s.
+  function soundLayers(seconds) {
+    return { master: reveal(seconds, 0, 10), water: reveal(seconds, 0, 60),
+      breeze: reveal(seconds, 20, 100), rain: reveal(seconds, 35, 170),
+      insects: reveal(seconds, 50, 160), frogs: reveal(seconds, 70, 165),
+      distant: reveal(seconds, 110, 180) };
+  }
   const voices = new Set();
   const beds = [];
   const next = { cricket: 0, water: 0, frog: 0, owl: 0, thunder: 0,
@@ -254,48 +266,49 @@
     source.stop(at + duration + 0.02);
   }
 
-  function playCroak(pitchScale = 1.0) {
+  function playCroak(pitchScale = 1.0, level = 1) {
     if (!active() || context.state !== 'running') return;
     const baseHz = random(148, 195) * pitchScale;
     // Syllable 1: resonant throat "rib-"
-    voice('triangle', baseHz, 0.16, 0.22, baseHz * 1.38, 0);
-    voice('sine', baseHz * 2.02, 0.14, 0.14, baseHz * 2.65, 0.01);
+    voice('triangle', baseHz, 0.16, 0.22 * level, baseHz * 1.38, 0);
+    voice('sine', baseHz * 2.02, 0.14, 0.14 * level, baseHz * 2.65, 0.01);
     // Syllable 2: expressive upward-then-downward "-bit!"
-    voice('triangle', baseHz * 1.12, 0.24, 0.26, baseHz * 0.72, 0.18);
-    voice('sine', baseHz * 2.24, 0.20, 0.16, baseHz * 1.45, 0.19);
+    voice('triangle', baseHz * 1.12, 0.24, 0.26 * level, baseHz * 0.72, 0.18);
+    voice('sine', baseHz * 2.24, 0.20, 0.16 * level, baseHz * 1.45, 0.19);
     // Subtle pad/water plop resonance
-    voice('sine', random(520, 760), 0.11, 0.09, random(210, 310), 0.04);
+    voice('sine', random(520, 760), 0.11, 0.09 * level, random(210, 310), 0.04);
   }
 
   function tick() {
     if (!active() || context.state !== 'running') return;
     const t = context.currentTime;
-    const r = Math.max(0.25, state.richness);
+    const r = state.richness;
+    const layers = soundLayers(state.elapsedSeconds);
     const night = state.sleeping;
     const storm = /storm|thunder|tormenta/i.test(state.weather);
     const rainLevel = storm ? 1 : /drizzle/i.test(state.weather) ? 0.35
       : /rain|lluvia/i.test(state.weather) ? 1 : 0;
-    smooth(beds[0].gain.gain, (0.065 + 0.02 * Math.sin(t * 0.17)) * (1 + 0.4 * rainLevel), 1.5);
-    smooth(beds[1].gain.gain, 0.022 + 0.012 * (1 + Math.sin(t * 0.31)), 1.2);
-    smooth(beds[2].gain.gain, 0.16 * rainLevel, 1.5);
-    if (t >= next.cricket) {
+    smooth(beds[0].gain.gain, layers.breeze * (0.065 + 0.02 * Math.sin(t * 0.17)) * (1 + 0.4 * rainLevel), 1.5);
+    smooth(beds[1].gain.gain, layers.water * (0.022 + 0.012 * (1 + Math.sin(t * 0.31))), 1.2);
+    smooth(beds[2].gain.gain, layers.rain * 0.16 * state.rainIntensity, 1.5);
+    if (layers.insects > 0 && t >= next.cricket) {
       next.cricket = t + random(1.4, 3.8) / (0.5 + r);
       const hz = random(3400, 4700);
-      for (let i = 0; i < 3; i++) voice('sine', hz, 0.065, night ? 0.045 : 0.032, hz * 0.98, i * 0.14);
+      for (let i = 0; i < 3; i++) voice('sine', hz, 0.065, layers.insects * (night ? 0.045 : 0.032), hz * 0.98, i * 0.14);
     }
     if (t >= next.water) {
       next.water = t + random(1.8, 4.8);
-      voice('sine', random(900, 1500), 0.22, 0.065, random(300, 500));
+      voice('sine', random(900, 1500), 0.22, 0.065 * layers.water, random(300, 500));
     }
-    if (t >= next.frog) {
+    if (layers.frogs > 0 && t >= next.frog) {
       next.frog = t + random(2.6, 5.8) / (0.6 + r);
-      playCroak(random(0.88, 1.24));
+      playCroak(random(0.88, 1.24), layers.frogs);
     }
     if (t >= next.owl) {
       next.owl = t + random(14, 28);
-      if (night || r > 0.35) {
-        voice('sine', 380, 0.65, 0.06, 320);
-        voice('sine', 350, 0.8, 0.05, 300, 0.95);
+      if (layers.distant > 0 && (night || r > 0.35)) {
+        voice('sine', 380, 0.65, 0.06 * layers.distant, 320);
+        voice('sine', 350, 0.8, 0.05 * layers.distant, 300, 0.95);
       }
     }
     if (t >= next.thunder) {
@@ -303,7 +316,7 @@
         const plan = thunderPlan(state.rainIntensity, t, thunderMemory.heavyAt);
         next.thunder = plan.nextAt;
         if (plan.kind === 'heavy') thunderMemory.heavyAt = t;
-        voice('noise', plan.cutoff, plan.duration, plan.gain, plan.cutoff, 0,
+        voice('noise', plan.cutoff, plan.duration, plan.gain * layers.rain, plan.cutoff, 0,
           { attack: plan.attack });
       } else next.thunder = t + random(THUNDER.INTERVAL_MIN, THUNDER.INTERVAL_MAX);
     }
@@ -315,19 +328,21 @@
   // and concurrency rules as everything else. More singers mean a slightly
   // denser chorus, never a louder one: gain saturates at three.
   function speciesVoices(t, r) {
+    const level = soundLayers(state.elapsedSeconds).insects;
+    if (level === 0) return;
     const s = state.species;
     const dens = (n) => Math.min(1, n / 3);
     if (s.cricket && t >= next.chorus) {
       // Field crickets: a four-pulse trill above the generic cricket bed.
       next.chorus = t + random(0.9, 2.4) / (0.6 + r) / (0.7 + 0.3 * dens(s.cricket));
       const hz = random(4100, 4800);
-      for (let i = 0; i < 4; i++) voice('sine', hz, 0.05, 0.028 * (0.6 + 0.4 * dens(s.cricket)), hz * 0.99, i * 0.09);
+      for (let i = 0; i < 4; i++) voice('sine', hz, 0.05, level * 0.028 * (0.6 + 0.4 * dens(s.cricket)), hz * 0.99, i * 0.09);
     }
     if (s.katydid && t >= next.katydid) {
       // Katydid rasp: three dry bandpassed noise ticks, "ch-ch-ch".
       next.katydid = t + random(2.4, 6) / (0.6 + r);
       for (let i = 0; i < 3; i++) {
-        voice('noise', 3200, 0.07, 0.04 * (0.6 + 0.4 * dens(s.katydid)), 3200, i * 0.15,
+        voice('noise', 3200, 0.07, level * 0.04 * (0.6 + 0.4 * dens(s.katydid)), 3200, i * 0.15,
           { filter: 'bandpass', cutoff: random(2900, 3500), q: 5, attack: 0.01 });
       }
     }
@@ -335,14 +350,14 @@
       // A bee passing: low sawtooth hum through a soft lowpass, panned.
       next.bee = t + random(3, 7.5) / (0.6 + r);
       const hz = random(215, 250);
-      voice('sawtooth', hz, random(1.1, 1.9), 0.03 * (0.7 + 0.3 * dens(s.bee)), hz * random(0.94, 1.08), 0,
+      voice('sawtooth', hz, random(1.1, 1.9), level * 0.03 * (0.7 + 0.3 * dens(s.bee)), hz * random(0.94, 1.08), 0,
         { cutoff: 1100, attack: 0.35, hold: 0.3 });
     }
     if (s.cicada && t >= next.cicada) {
       // Cicada drone: a buzzy square swelling over seconds, kept far back.
       next.cicada = t + random(7, 15) / (0.6 + r);
       const hz = random(104, 126);
-      voice('square', hz, random(2.6, 4.2), 0.022 * (0.7 + 0.3 * dens(s.cicada)), hz * 1.08, 0,
+      voice('square', hz, random(2.6, 4.2), level * 0.022 * (0.7 + 0.3 * dens(s.cicada)), hz * 1.08, 0,
         { cutoff: 4200, attack: 1.0, hold: 0.35 });
     }
   }
@@ -366,7 +381,7 @@
     context.resume().then(() => {
       if (disposed || attempt !== unlockAttempt) return;
       if (!active()) { stop(); return; }
-      smooth(master.gain, (0.76 + 0.20 * state.richness) * (state.sleeping ? 0.68 : 1), 0.35);
+      smooth(master.gain, soundLayers(state.elapsedSeconds).master * 0.96, 0.08);
       if (timer === undefined) {
         tick();
         timer = window.setInterval(tick, 250);
@@ -379,12 +394,13 @@
   window.ranitasAudio = Object.freeze({
     // `rainIntensity` (0–1) and `species` (`voice:count,…`) are optional; an
     // older caller that omits them gets the pre-envelope behaviour.
-    update(progress, richness, weather, sleeping, rainIntensity, species) {
+    update(progress, richness, weather, sleeping, rainIntensity, species, elapsedSeconds) {
       if (disposed) return;
       state = { progress: clamp(progress), richness: clamp(richness),
         weather: typeof weather === 'string' ? weather : 'clear', sleeping: sleeping === true,
         rainIntensity: rainIntensity === undefined ? (/storm|thunder|tormenta/i.test(String(weather)) ? 0.6 : 0) : clamp(rainIntensity),
-        species: parseSpecies(species) };
+        species: parseSpecies(species),
+        elapsedSeconds: Number.isFinite(elapsedSeconds) ? Math.max(0, elapsedSeconds) : clamp(richness) * 180 };
       // A pre-gesture update cannot queue sound for the intro press. Require a
       // fresh positive update after the unlocking pointer or key has been released.
       if (!started && unlocked && gestureEnded && state.richness > 0) started = true;
@@ -413,6 +429,7 @@
     },
     // Pure helpers exposed for tests; they touch no audio state.
     thunderPlan,
+    soundLayers,
     parseSpecies,
     thunderLimits: THUNDER,
   });

@@ -201,7 +201,7 @@ void main() {
     'leans follow the wind trace, stay bounded and freeze under reduced motion',
     () {
       final painter = FoliagePainter();
-      final model = _modelFor('maple');
+      final model = _modelFor('maple')..progress = 1;
       final spec = FoliageSpec.forBiome('maple');
       final foliage = painter.modelFor(model);
       final branch = foliage.branches.first;
@@ -319,7 +319,7 @@ void main() {
       painter.foliage.branchStrip = strip;
       await painter.foliage.prepare('willow');
       expect(painter.foliage.atlas!.scale, 2);
-      final model = _modelFor('willow');
+      final model = _modelFor('willow')..progress = 1;
       model.press();
       model.release();
       model.update(6);
@@ -340,7 +340,7 @@ void main() {
 
   test('bush shear saturates and flips with the wind', () {
     final painter = FoliagePainter();
-    final model = _modelFor('willow');
+    final model = _modelFor('willow')..progress = 1;
     final bush = painter.modelFor(model).nearBushes.first;
     for (var i = 0; i <= 60; i++) {
       model.time += 1 / 60;

@@ -259,5 +259,5 @@ void main() {
       lessThanOrEqualTo(18),
       reason: '30-minute post-sleep list cap',
     );
-  }, timeout: const Timeout(Duration(minutes: 5)));
+  }, tags: 'soak', timeout: const Timeout(Duration(minutes: 5)));
 }

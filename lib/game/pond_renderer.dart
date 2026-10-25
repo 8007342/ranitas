@@ -6,6 +6,7 @@ import 'palette_cycle.dart';
 import 'pond_model.dart';
 import 'scene_grade.dart';
 import 'scene_layers.dart';
+import 'distant_atmosphere.dart';
 
 /// Widescreen pixel pond scenery implementing the 6-Tier Composable Rendering
 /// Architecture (`art/INTERACTION_STYLEGUIDE.md`). The caller retains ownership
@@ -28,6 +29,7 @@ class PondRenderer {
   /// Data-driven layer stack (design D5); holds the optional canopy, mid-bank
   /// and foreground images.
   final SceneLayerPainter layers = SceneLayerPainter();
+  final DistantAtmosphere distantAtmosphere = DistantAtmosphere();
 
   /// Palette-cycle regions baked for the current backdrop (design D4).
   List<PaletteCycle> cycles = const [];
@@ -300,9 +302,7 @@ class PondRenderer {
     if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
     _cache(model);
     final t = model.time;
-    final motion = reducedMotion
-        ? 0.0
-        : .03 + .97 * model.richness.clamp(0.0, 1.0);
+    final motion = reducedMotion ? 0.0 : model.ambientMotion;
     final progress = model.progress.clamp(0.0, 1.0);
     final night = (1 - model.daylight).clamp(0.0, 1.0);
     layers.reducedMotion = reducedMotion;
@@ -341,12 +341,22 @@ class PondRenderer {
     }
     // Palette-cycled waterfalls, streams and glows sit on the graded backdrop.
     for (final cycle in cycles) {
-      cycle.draw(canvas, t, reducedMotion: reducedMotion, grade: grade);
+      // A radial star ramp paints a square of unrelated sky pixels. Keep
+      // painted star cores in the precisely clipped emissive pass instead.
+      if (cycle.spec.id.startsWith('star')) continue;
+      cycle.draw(
+        canvas,
+        model.ambientTime,
+        reducedMotion: reducedMotion,
+        strength: cycle.spec.emissive ? model.glowReveal : model.ambientMotion,
+        grade: grade,
+      );
     }
     if (model.cycle == 'dawn') {
       _rect(canvas, 0, 0, _width, 185, 0xffffc68e, progress * .12);
     }
     _sky(canvas, model, night);
+    distantAtmosphere.draw(canvas, model, reducedMotion: reducedMotion);
     layers.drawSlot(canvas, LayerSlot.farBank, model, motion);
 
     // TIER 1: Sub-Surface Water Caustics & Submerged Stems
@@ -442,11 +452,11 @@ class PondRenderer {
   ) {
     final mask = emissive;
     if (mask == null) return;
-    final strength = (night * model.richness.clamp(0.0, 1.0) * .85).clamp(
+    final strength = (night * model.glowReveal * .85).clamp(
       0.0,
       1.0,
     );
-    if (strength < .02) return;
+    if (strength <= 0) return;
     canvas.saveLayer(
       frame,
       ui.Paint()
@@ -476,7 +486,10 @@ class PondRenderer {
       final a =
           night *
           (.2 + .55 * d.z) *
-          (reducedMotion ? 1 : .8 + .2 * math.sin(m.time * .5 + d.w * 9));
+          m.glowReveal *
+          (reducedMotion
+              ? 1
+              : .92 + .08 * math.sin(m.ambientTime * .15 + d.w * 9));
       _rect(c, 55 + d.x * 530, 14 + d.y * 92, 1, 1, 0xffffebc3, a);
     }
     if (backdrop == null) {
@@ -484,15 +497,7 @@ class PondRenderer {
       _oval(c, 445, 68, 8, 8, 0xffffe5b7, .85);
       for (var i = 0; i < 11; i++) {
         final d = _details[i + 36];
-        _rect(
-          c,
-          d.x * 560,
-          52 + d.y * 65,
-          24 + d.z * 55,
-          2,
-          0xffe3a8b0,
-          .25,
-        );
+        _rect(c, d.x * 560, 52 + d.y * 65, 24 + d.z * 55, 2, 0xffe3a8b0, .25);
       }
     }
   }
@@ -508,23 +513,25 @@ class PondRenderer {
       final right = m.basin.rightX(y);
       final drift = math.sin(m.time * .28 + d.w * 14) * 5 * motion;
       final x = (left + d.x * (right - left) + drift).clamp(left, right - 12);
-      _rect(
-        c,
-        x,
-        y,
-        6 + d.z * 18,
-        1,
-        causticColor,
-        .045 + d.z * .04,
-      );
+      _rect(c, x, y, 6 + d.z * 18, 1, causticColor, .045 + d.z * .04);
     }
     for (final pad in [...m.ambientPads, ...m.pads]) {
       final px = pad.x * _width + pad.driftX * .5;
       final py = pad.y * _height + 5 + pad.floatY + pad.dipY * .5;
       final sway = math.sin(m.time * .6 + pad.index) * 2.5 * motion;
       final stemLen =
-          (pad.isAmbient ? 16.0 : 28.0) * m.basin.perspectiveAt(pad.y * _height);
-      _line(c, px, py, px + sway, py + stemLen, 0xff0d333b, .35, pad.isAmbient ? 1 : 2);
+          (pad.isAmbient ? 16.0 : 28.0) *
+          m.basin.perspectiveAt(pad.y * _height);
+      _line(
+        c,
+        px,
+        py,
+        px + sway,
+        py + stemLen,
+        0xff0d333b,
+        .35,
+        pad.isAmbient ? 1 : 2,
+      );
     }
   }
 
@@ -599,16 +606,22 @@ class PondRenderer {
           (k.depth + math.sin(k.pitch) * (2.5 - i) * .095).clamp(0.05, 0.96);
 
       double segAlpha(double sDepth) =>
-          (baseKoiVisibility * (1.0 - sDepth * .48) * (1.0 - viewportDist * .18))
+          (baseKoiVisibility *
+                  (1.0 - sDepth * .48) *
+                  (1.0 - viewportDist * .18))
               .clamp(0.22, 0.90);
 
-      final (int rawBody, int rawPatch1, int rawPatch2, int rawFin) =
-          switch (k.variant % 4) {
-            0 => (0xfff4efe2, 0xffe04832, 0xfff06a4d, 0xfff7f2e6), // Kohaku
-            1 => (0xfff5bc47, 0xffffe484, 0xffd49326, 0xffffe8ad), // Yamabuki
-            2 => (0xffede8dc, 0xffd43b30, 0xff1c2b36, 0xfff0ebe0), // Showa
-            _ => (0xff6e9db8, 0xff9ec8e0, 0xffeb784d, 0xfff29168), // Asagi
-          };
+      final (
+        int rawBody,
+        int rawPatch1,
+        int rawPatch2,
+        int rawFin,
+      ) = switch (k.variant % 4) {
+        0 => (0xfff4efe2, 0xffe04832, 0xfff06a4d, 0xfff7f2e6), // Kohaku
+        1 => (0xfff5bc47, 0xffffe484, 0xffd49326, 0xffffe8ad), // Yamabuki
+        2 => (0xffede8dc, 0xffd43b30, 0xff1c2b36, 0xfff0ebe0), // Showa
+        _ => (0xff6e9db8, 0xff9ec8e0, 0xffeb784d, 0xfff29168), // Asagi
+      };
 
       double segX(int i, double sOffset) {
         final wave = reducedMotion
@@ -714,7 +727,15 @@ class PondRenderer {
         if (sDepth < 0.36 && (i == 1 || i == 2 || i == 3)) {
           final glintAlpha = ((0.36 - sDepth) / 0.36) * sAlpha * .55;
           final glintCol = submergeColor(0xffb8f7ee, sDepth * .5, viewportDist);
-          _rect(c, cx - r * .35, cy - ry * .45, r * .7, 1, glintCol, glintAlpha);
+          _rect(
+            c,
+            cx - r * .35,
+            cy - ry * .45,
+            r * .7,
+            1,
+            glintCol,
+            glintAlpha,
+          );
         }
       }
 
@@ -725,24 +746,8 @@ class PondRenderer {
         final hy = segY(1, offsets[1]);
         final eyeCol = submergeColor(0xff10262e, headDepth, viewportDist);
         final eyeAlpha = segAlpha(headDepth) * .88;
-        _rect(
-          c,
-          hx + perpX * 2.2,
-          hy + perpY * 2.2,
-          1,
-          1,
-          eyeCol,
-          eyeAlpha,
-        );
-        _rect(
-          c,
-          hx - perpX * 2.2,
-          hy - perpY * 2.2,
-          1,
-          1,
-          eyeCol,
-          eyeAlpha,
-        );
+        _rect(c, hx + perpX * 2.2, hy + perpY * 2.2, 1, 1, eyeCol, eyeAlpha);
+        _rect(c, hx - perpX * 2.2, hy - perpY * 2.2, 1, 1, eyeCol, eyeAlpha);
       }
     }
   }
@@ -769,15 +774,7 @@ class PondRenderer {
       final x = (left + d.x * (right - left) + wave * 3.0)
           .clamp(left, math.max(left, right - w))
           .toDouble();
-      _rect(
-        c,
-        x,
-        y,
-        w,
-        1,
-        shimmerColor,
-        a,
-      );
+      _rect(c, x, y, w, 1, shimmerColor, a);
     }
 
     // 2. Composable Dual-Ring Expanding Water Ripples (INTERACTION_STYLEGUIDE §2)
@@ -898,8 +895,20 @@ class PondRenderer {
     );
 
     if (pad.isSuper) {
-      _superPadBody(c, pad, px, py, bodyRx, ry, scaleRatio, depth, slit, theta,
-          hazed, angleGap);
+      _superPadBody(
+        c,
+        pad,
+        px,
+        py,
+        bodyRx,
+        ry,
+        scaleRatio,
+        depth,
+        slit,
+        theta,
+        hazed,
+        angleGap,
+      );
     } else {
       // 2. Reddish-plum underside reveal when opposite rim lifts during tilt or edge fold
       final rimLift = (rx * math.sin(tilt.abs()) + fold * 3.0);
@@ -918,7 +927,16 @@ class PondRenderer {
       }
 
       // 3. Dark teal outer rim & main emerald leaf body (compressed on folded edge)
-      _ovalCut(c, bodyCenterX, py + 1.5 * scaleRatio, bodyRx, ry, padRim, 1, slit);
+      _ovalCut(
+        c,
+        bodyCenterX,
+        py + 1.5 * scaleRatio,
+        bodyRx,
+        ry,
+        padRim,
+        1,
+        slit,
+      );
       _ovalCut(c, bodyCenterX, py, bodyRx, ry, padMid, 1, slit);
       if (bodyRx > 6 && ry > 3.2) {
         _ovalCut(
@@ -936,8 +954,16 @@ class PondRenderer {
       // 4. Center water-cup depression when frog lands in Zone A (center)
       if (pad.dipY > 1.0 && fold < 0.35) {
         final cupAlpha = ((pad.dipY - 1.0) / 3.5).clamp(0.0, 0.55);
-        _ovalCut(c, bodyCenterX, py - 1, bodyRx * .48, ry * .48, 0xff215c58,
-            cupAlpha, slit);
+        _ovalCut(
+          c,
+          bodyCenterX,
+          py - 1,
+          bodyRx * .48,
+          ry * .48,
+          0xff215c58,
+          cupAlpha,
+          slit,
+        );
       }
 
       // 5. Radial leaf veins, eight around the pad plane turning with it,
@@ -1011,7 +1037,8 @@ class PondRenderer {
 
     // 7. Bouncing surface dewdrop bead on the pad
     if (scaleRatio > 0.48) {
-      final dropX = bodyCenterX - (pad.index % 2) * 6 * scaleRatio + 3 * scaleRatio;
+      final dropX =
+          bodyCenterX - (pad.index % 2) * 6 * scaleRatio + 3 * scaleRatio;
       final dropY = py - 1.5 * scaleRatio - pad.dewdropBounce.abs() * 1.4;
       _rect(c, dropX, dropY, 2, 2, 0xffb8efe6, .78);
       _rect(c, dropX, dropY, 1, 1, 0xffffffff, .9);
@@ -1019,12 +1046,19 @@ class PondRenderer {
 
     // 8. Companion floating water lotus bloom beside pad 0 or lotus-bearing ambient pads
     if (pad.index == 0 || pad.hasLotus) {
-      final bScale = pad.isAmbient ? (scaleRatio * 1.15).clamp(0.55, 0.95) : 1.0;
+      final bScale = pad.isAmbient
+          ? (scaleRatio * 1.15).clamp(0.55, 0.95)
+          : 1.0;
       final orbit = math.pi + pad.yaw;
       final lx =
-          px + math.cos(orbit) * (rx + 8 * bScale) + math.sin(t * .5) * 1.2 * motion;
+          px +
+          math.cos(orbit) * (rx + 8 * bScale) +
+          math.sin(t * .5) * 1.2 * motion;
       final ly =
-          py + 4 * bScale + math.sin(orbit) * (ry + 2 * bScale) + pad.dipY * .35;
+          py +
+          4 * bScale +
+          math.sin(orbit) * (ry + 2 * bScale) +
+          pad.dipY * .35;
       _oval(c, lx, ly + 2 * bScale, 8 * bScale, 3 * bScale, 0xff1f5750, .85);
       _oval(c, lx - 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
       _oval(c, lx + 3 * bScale, ly, 4 * bScale, 2 * bScale, 0xffe69cb8, .92);
@@ -1151,11 +1185,13 @@ class PondRenderer {
   }
 
   void _motifs(ui.Canvas c, PondModel m, double motion, double night) {
+    if (m.glowReveal <= 0) return;
     if (m.biome == 'sanctuary' || m.biome == 'jade_sanctuary') {
       final flicker = reducedMotion
           ? .85
           : .75 + .25 * math.sin(m.time * 4.3) * math.cos(m.time * 2.7);
-      final glowAlpha = (.18 + night * .35 + m.richness * .2) * flicker;
+      final glowAlpha =
+          (.18 + night * .35 + m.richness * .2) * flicker * m.glowReveal;
       final glowCol = m.biome == 'jade_sanctuary' ? 0xff7ef5c4 : 0xffffb85c;
       final coreCol = m.biome == 'jade_sanctuary' ? 0xffdfffe8 : 0xffffefc2;
       _oval(c, 114, 168, 12, 9, glowCol, glowAlpha * .45);
@@ -1195,9 +1231,8 @@ class PondRenderer {
   }
 
   void _foliage(ui.Canvas c, PondModel m, double motion, bool hasImage) {
-    final blossom = m.biome == 'blossom' ||
-        m.biome == 'sanctuary' ||
-        m.biome == 'lotus';
+    final blossom =
+        m.biome == 'blossom' || m.biome == 'sanctuary' || m.biome == 'lotus';
     final maple = m.biome == 'maple' || m.biome == 'autumn_mist';
     final grotto = m.biome == 'grotto' || m.biome == 'crystal_grotto';
     for (var i = 100; i < 126; i++) {
@@ -1379,7 +1414,9 @@ class PondRenderer {
       _rect(c, x, y - 2, 1, 1, 0xff5a4a3c, a);
     } else if (b.species == 'mayfly') {
       // Slender upright body, one translucent sail wing, two tail filaments.
-      final flick = reducedMotion ? .6 : .35 + .45 * math.sin(b.phase * 2).abs();
+      final flick = reducedMotion
+          ? .6
+          : .35 + .45 * math.sin(b.phase * 2).abs();
       _rect(c, x, y - 4, 1, 3, 0xffeaf6f2, a * flick);
       _rect(c, x, y - 1, 1, 4, 0xffd8e2c8, a);
       _rect(c, x, y - 1, 1, 1, 0xff4d5b4b, a);
@@ -1431,7 +1468,7 @@ class PondRenderer {
       }
     }
     final rain = m.raining;
-    final intensity = m.rainIntensity;
+    final intensity = m.rainIntensity * m.weatherReveal;
     // Heavy rain brings its own low fog, fading in above intensity 0.5.
     final heavyFog = ((intensity - .5) / .5).clamp(0.0, 1.0);
     final mistFog = m.weather == 'mist' || m.biome == 'autumn_mist';
@@ -1448,9 +1485,9 @@ class PondRenderer {
           0xffb7cdd0,
           // Mist bands follow the fog's density: thicker toward night.
           m.weather == 'mist'
-              ? .03 + .05 * m.mistDensity
+              ? (.03 + .05 * m.mistDensity) * m.weatherReveal
               : mistFog
-              ? .055
+              ? .055 * m.weatherReveal
               : .035 * heavyFog,
         );
       }
@@ -1458,7 +1495,7 @@ class PondRenderer {
     if (rain) {
       if (!reducedMotion && m.raindrops.isNotEmpty) {
         final windDx = m.wind * 2.4;
-        final streakAlpha = .22 + .16 * intensity;
+        final streakAlpha = (.22 + .16 * intensity) * m.weatherReveal;
         for (final drop in m.raindrops) {
           if (drop.y < -8) continue;
           final endY = math.min(drop.y, drop.targetY);
@@ -1473,7 +1510,7 @@ class PondRenderer {
             0xffc6e4e8,
             streakAlpha,
           );
-          _rect(c, drop.x, endY, 1, 1, 0xffe8fafc, .52);
+          _rect(c, drop.x, endY, 1, 1, 0xffe8fafc, .52 * m.weatherReveal);
         }
         // Downpour sheets above 0.7 are visual only: no impacts, no ripples.
         final sheet = ((intensity - .7) / .3).clamp(0.0, 1.0);
@@ -1483,22 +1520,22 @@ class PondRenderer {
           final y = (d.y * _height + m.time * (250 + d.z * 90)) % _height;
           final x = (d.x * _width + m.wind * y * .1) % _width;
           final length = 9 + d.w * 7;
-          _line(
-            c,
-            x - windDx,
-            y - length,
-            x,
-            y,
-            0xffc6e4e8,
-            .14 + .14 * sheet,
-          );
+          _line(c, x - windDx, y - length, x, y, 0xffc6e4e8, .14 + .14 * sheet);
         }
       } else {
         for (var i = 0; i < 16; i++) {
           final d = _details[i];
           final y = (d.y * _height + m.time * 12) % _height;
           final x = (d.x * _width + m.wind * y * .08) % _width;
-          _line(c, x, y, x - 1 - m.wind * 2, y + 4, 0xffb8d3d6, .18);
+          _line(
+            c,
+            x,
+            y,
+            x - 1 - m.wind * 2,
+            y + 4,
+            0xffb8d3d6,
+            .18 * m.weatherReveal,
+          );
         }
       }
     }
@@ -1616,6 +1653,7 @@ class _Slit {
       out[n * 2 + 1] = math.min(right, colHi);
       n++;
     }
+
     if (innerHalf <= 0) {
       emit(lo, hi);
     } else {

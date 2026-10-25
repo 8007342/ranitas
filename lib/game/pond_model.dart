@@ -3,6 +3,7 @@ import 'dart:math';
 import 'insect_species.dart';
 import 'jump_policy.dart';
 import 'rain_envelope.dart';
+import 'awakening.dart';
 
 /// A deterministic, renderer-independent pond. Coordinates use a landscape
 /// viewport with (0, 0) at the upper left. Advance with seconds, not milliseconds.
@@ -47,7 +48,8 @@ class PondModel {
     // About a quarter of worlds grow one super pad. The basins are too small
     // for one beside the jump lane, so those worlds seed both heroes in the
     // near band and the super pad takes the far shore behind them.
-    _wantsSuperPad = _fxRandom.nextDouble() < _superPadChance &&
+    _wantsSuperPad =
+        _fxRandom.nextDouble() < _superPadChance &&
         basin.bottomY - basin.topY >= _superPadBasinHeight;
     pads = _placeHeroPads(nearBand: _wantsSuperPad);
     var ambient = _generateAmbientPads(allowLarge: true);
@@ -69,7 +71,8 @@ class PondModel {
       final left = basin.leftX(y) + 28.0;
       final right = basin.rightX(y) - 28.0;
       final startX =
-          left + ((i + .5) / 4.0) * max(20.0, right - left) +
+          left +
+          ((i + .5) / 4.0) * max(20.0, right - left) +
           (_fxRandom.nextDouble() - .5) * 18.0;
       return KoiState(
         index: i,
@@ -127,6 +130,18 @@ class PondModel {
   double elapsed = 0;
   double progress = 0;
   double richness = 0;
+
+  /// Foreground play time drives the reveal; decorative motion keeps living
+  /// after sleep. Short explicit test sessions preserve these proportions.
+  double get awakeningSeconds =>
+      _durationOverride == null ? elapsed : progress * 180;
+  double ambientTime = 0;
+  double get ambientMotion => Awakening.water(awakeningSeconds);
+  double get foliageMotion => Awakening.foliage(awakeningSeconds);
+  double get weatherReveal => Awakening.weather(awakeningSeconds);
+  double get wildlifeReveal => Awakening.wildlife(awakeningSeconds);
+  double get distantReveal => Awakening.distant(awakeningSeconds);
+  double get glowReveal => Awakening.glow(awakeningSeconds);
   double wind = 0;
   double windTell = 0;
   double engagement = 0;
@@ -188,7 +203,8 @@ class PondModel {
       (weather == 'mist' && rainIntensity > 0);
 
   /// Cloud darkening for the scene grade, from the rain intensity.
-  double get cloudDarkening => RainEnvelope.cloudFor(rainIntensity);
+  double get cloudDarkening =>
+      RainEnvelope.cloudFor(rainIntensity) * weatherReveal;
 
   /// Insect spawn-budget shelter: 1 when dry, lower as rain thickens.
   double get insectShelter =>
@@ -301,24 +317,38 @@ class PondModel {
   double _basinRoom(PadState pad) {
     final px = pad.x * 641;
     final py = pad.y * 359;
-    var room = min(
-      min(px - pad.radiusX - basin.leftX(py), basin.rightX(py) - pad.radiusX - px),
-      min(py - pad.radiusY - basin.topY, basin.bottomY - pad.radiusY - py),
-    ) - 4;
+    var room =
+        min(
+          min(
+            px - pad.radiusX - basin.leftX(py),
+            basin.rightX(py) - pad.radiusX - px,
+          ),
+          min(py - pad.radiusY - basin.topY, basin.bottomY - pad.radiusY - py),
+        ) -
+        4;
     // The basin narrows toward the far shore, so re-check the walls at the
     // highest point the pad could reach.
     final probeY = max(basin.topY, py - max(0.0, room));
     room = min(
       room,
-      min(px - pad.radiusX - basin.leftX(probeY),
-              basin.rightX(probeY) - pad.radiusX - px) -
+      min(
+            px - pad.radiusX - basin.leftX(probeY),
+            basin.rightX(probeY) - pad.radiusX - px,
+          ) -
           4,
     );
     return max(1.0, room);
   }
 
-  PadState _heroCandidate(int index, double baseRx, double section, double py,
-      double frac, double phase, double spinBias) {
+  PadState _heroCandidate(
+    int index,
+    double baseRx,
+    double section,
+    double py,
+    double frac,
+    double phase,
+    double spinBias,
+  ) {
     final s = basin.perspectiveAt(py);
     final rx = baseRx * s;
     // Narrowest walls the section can reach lie toward the far shore.
@@ -498,7 +528,8 @@ class PondModel {
   /// indices are offset to stay non-negative, and every intermediate product
   /// stays below 2^53 for the web target.
   double _lattice(int ix, int iy, int it) {
-    var h = ((ix + 64) * 73856093) ^
+    var h =
+        ((ix + 64) * 73856093) ^
         ((iy + 64) * 19349663) ^
         ((it + 64) * 83492791) ^
         _noiseSeed;
@@ -515,8 +546,16 @@ class PondModel {
     final fx = _fade(x - x0), fy = _fade(y - y0), fz = _fade(z - z0);
     double lerp(double a, double b, double t) => a + (b - a) * t;
     final c00 = lerp(_lattice(x0, y0, z0), _lattice(x0 + 1, y0, z0), fx);
-    final c10 = lerp(_lattice(x0, y0 + 1, z0), _lattice(x0 + 1, y0 + 1, z0), fx);
-    final c01 = lerp(_lattice(x0, y0, z0 + 1), _lattice(x0 + 1, y0, z0 + 1), fx);
+    final c10 = lerp(
+      _lattice(x0, y0 + 1, z0),
+      _lattice(x0 + 1, y0 + 1, z0),
+      fx,
+    );
+    final c01 = lerp(
+      _lattice(x0, y0, z0 + 1),
+      _lattice(x0 + 1, y0, z0 + 1),
+      fx,
+    );
     final c11 = lerp(
       _lattice(x0, y0 + 1, z0 + 1),
       _lattice(x0 + 1, y0 + 1, z0 + 1),
@@ -552,10 +591,10 @@ class PondModel {
     const eps = 2 / _currentScale;
     final gx =
         (_valueNoise(px + eps, py, pt) - _valueNoise(px - eps, py, pt)) /
-            (2 * eps);
+        (2 * eps);
     final gy =
         (_valueNoise(px, py + eps, pt) - _valueNoise(px, py - eps, pt)) /
-            (2 * eps);
+        (2 * eps);
     // Curl of the scalar potential: perpendicular to its gradient.
     var cx = gy;
     var cy = -gx;
@@ -569,7 +608,7 @@ class PondModel {
     }
     final speed =
         (.8 + 1.2 * (mag / 1.1).clamp(0.0, 1.0)) * (ambient ? 1.0 : .6);
-    return (cx * speed + wind * 3, cy * speed);
+    return (cx * speed * ambientMotion + wind * 3, cy * speed * ambientMotion);
   }
 
   /// Spins a pad from a push through the water. The slit removes leaf area on
@@ -618,7 +657,10 @@ class PondModel {
     pad.yawVelocity += share * torque / (r * r / 2);
     _spinFromPush(pad, share * jx, share * jy, 1);
     // One hop turns a pad by a gentle amount, never a spin.
-    final kick = (pad.yawVelocity - before).clamp(-_impactSpinCap, _impactSpinCap);
+    final kick = (pad.yawVelocity - before).clamp(
+      -_impactSpinCap,
+      _impactSpinCap,
+    );
     pad.yawVelocity = before + kick;
   }
 
@@ -739,9 +781,12 @@ class PondModel {
     // rotation (current shear plus the seeded bias), so a pad keeps turning
     // slowly for as long as the pond does; impacts add on top and decay at
     // the same rate. The angle wraps so it stays bounded for ever.
-    final waterSpin =
-        (vorticityAt(pad) + pad.spinBias).clamp(-_waterSpinCap, _waterSpinCap);
-    pad.yawVelocity += (waterSpin - pad.yawVelocity) * (1 - exp(-_yawDrag * dt));
+    final waterSpin = (vorticityAt(pad) + pad.spinBias * ambientMotion).clamp(
+      -_waterSpinCap,
+      _waterSpinCap,
+    );
+    pad.yawVelocity +=
+        (waterSpin - pad.yawVelocity) * (1 - exp(-_yawDrag * dt));
     pad.yawVelocity = pad.yawVelocity.clamp(-_yawCap, _yawCap);
     pad.yaw += pad.yawVelocity * dt;
     if (pad.yaw > pi) {
@@ -844,8 +889,8 @@ class PondModel {
       elapsed += dt;
       engagement *= exp(-dt / 18);
       if (_durationOverride == null) {
-        duration += (180 + 180 * engagement - duration) * (1 - exp(-dt / 12));
-        duration = duration.clamp(180.0, 360.0);
+        duration += (240 + 60 * engagement - duration) * (1 - exp(-dt / 12));
+        duration = duration.clamp(240.0, 300.0);
       }
       final fraction = (elapsed / duration).clamp(0.0, 1.0);
       progress = max(progress, fraction * fraction * (3 - 2 * fraction));
@@ -855,7 +900,8 @@ class PondModel {
         cancelPress();
       }
     }
-    richness = progress;
+    richness = Awakening.reveal(awakeningSeconds, 0, 180);
+    ambientTime += dt * ambientMotion;
     period = cycle == 'dawn'
         ? (progress < .2
               ? 'night'
@@ -934,12 +980,22 @@ class PondModel {
   double _leafY(int leaf) => pads[leaf].y;
 
   /// Pad-relative perch offset (normalised x). A frog visiting the other's
-  /// leaf sits toward its own home side, just inside the rim, so both
-  /// silhouettes stay apart even on the smallest far pad.
+  /// leaf sits slightly toward its home side. Full foot support takes
+  /// precedence over separating silhouettes when both frogs share a pad.
   double perchOffsetX(int frogIndex, int leaf) {
     if (leaf == frogIndex) return 0;
     final side = frogIndex == 0 ? -1.0 : 1.0;
-    return side * (pads[leaf].radiusX * .78 + 4) / 641;
+    return side *
+        min(
+          3.0,
+          max(
+            0.0,
+            pads[leaf].radiusX -
+                17 * basin.perspectiveAt(pads[leaf].y * 359) -
+                3,
+          ),
+        ) /
+        641;
   }
 
   // Flights are serialized; the vertical lane additionally separates passing
@@ -956,7 +1012,7 @@ class PondModel {
     final targetPad = pads[frog._targetLeaf];
     // Choose the landing point before flight, including homeward flights.
     // Nearly vertical variation keeps both perches separated on the same pad.
-    final radius = .005 + random.nextDouble() * .01;
+    final radius = .0005 + random.nextDouble() * .0015;
     final angle = pi / 2 + (random.nextDouble() - .5) * .4;
     final sign = random.nextBool() ? 1 : -1;
     final ySign = frogs[1 - frog.index].leafIndex == frog._targetLeaf
@@ -965,6 +1021,15 @@ class PondModel {
     frog._perchTargetDx =
         perchOffsetX(frog.index, frog._targetLeaf) + cos(angle) * radius * sign;
     frog._perchTargetDy = sin(angle) * radius * ySign;
+    // Fit the widest perched foot span inside the pad ellipse, with margin.
+    final footHalf = 17 * basin.perspectiveAt(targetPad.y * 359);
+    final dyPx = frog._perchTargetDy * 359;
+    final span =
+        targetPad.radiusX *
+        sqrt(max(0.0, 1 - pow(dyPx / max(1.0, targetPad.radiusY - 2), 2)));
+    final safeX = max(0.0, span - footHalf - 2);
+    frog._perchTargetDx =
+        (frog._perchTargetDx * 641).clamp(-safeX, safeX) / 641;
     frog._toX = targetPad.x + frog._perchTargetDx;
     frog._toY = targetPad.y + frog._perchTargetDy;
     frog._duration = _flightDuration(action);
@@ -1327,14 +1392,16 @@ class PondModel {
       sqrt((x - bx) * (x - bx) + (y - by) * (y - by));
 
   void _updateWind(double dt) {
-    if (!started || _settling || sleeping) {
-      wind *= exp(-dt * 3);
+    if (!started) {
+      wind = 0;
       windTell = 0;
       return;
     }
+    final reveal = Awakening.breeze(awakeningSeconds);
+    final baseline = sin(ambientTime * .13) * .06 * reveal;
     if (_gustAge < 0) {
       _gustClock -= dt;
-      wind = sin(time * .31) * .06;
+      wind = baseline;
       windTell = 0;
       if (_gustClock <= 0) {
         _gustAge = 0;
@@ -1343,20 +1410,21 @@ class PondModel {
       return;
     }
     _gustAge += dt;
-    if (_gustAge < 1.8) {
-      windTell = (_gustAge / 1.8).clamp(0.0, 1.0);
-      wind = _gustDirection * .08 * windTell;
-    } else {
-      windTell = 0;
-      wind =
-          _gustDirection *
-          sin(((_gustAge - 1.8) / 3).clamp(0.0, 1.0) * pi) *
-          .85;
-    }
-    if (_gustAge >= 4.8) {
+    // A forecast and a broad gust overlap smoothly. Neither value jumps at
+    // the handoff, and the ambient baseline continues between gusts/sleep.
+    windTell =
+        Awakening.reveal(_gustAge, 0, 2) *
+        (1 - Awakening.reveal(_gustAge, 2, 5)) *
+        reveal;
+    final gust =
+        Awakening.reveal(_gustAge, 1, 6) *
+        (1 - Awakening.reveal(_gustAge, 8, 12));
+    wind = baseline + _gustDirection * .24 * gust * reveal;
+    if (_gustAge >= 12) {
       _gustAge = -1;
       _gustClock = (weather == 'storm' ? 10 : 16) + random.nextDouble() * 20;
-      wind = 0;
+      wind = baseline;
+      windTell = 0;
     }
   }
 
@@ -1444,8 +1512,7 @@ class PondModel {
       var targetY =
           sin(bug._heading) * speed * info.vertical + sin(bug.phase) * info.bob;
       targetX += max(0, .14 - bug.x) * .8 - max(0, bug.x - .86) * .8;
-      targetY +=
-          max(0, bandLow - bug.y) * .8 - max(0, bug.y - bandHigh) * .8;
+      targetY += max(0, bandLow - bug.y) * .8 - max(0, bug.y - bandHigh) * .8;
       if (info.lightSeeking && light != null) {
         // Moths circle the lantern: pull toward it plus a tangential drift.
         final dx = light.$1 - bug.x;
@@ -1545,8 +1612,7 @@ class PondModel {
           final waveStrength =
               r.intensity * (1.0 - r.progress) * (pad.isAmbient ? 1.35 : .75);
           pad.dipVelocity += sin(crestDelta * .45) * 16.0 * waveStrength * dt;
-          pad.tiltVelocity +=
-              (dx >= 0 ? 1.0 : -1.0) * 9.5 * waveStrength * dt;
+          pad.tiltVelocity += (dx >= 0 ? 1.0 : -1.0) * 9.5 * waveStrength * dt;
           pad.driftVelocity += (dx / dist) * 14.0 * waveStrength * dt;
           if (pad.isAmbient) {
             pad.floatVelocity += (dy / dist) * 4.5 * waveStrength * dt;
@@ -1575,7 +1641,8 @@ class PondModel {
           final wake =
               ((pad.radiusX + 18.0 - dist) / (pad.radiusX + 18.0)) *
               (1.0 - k.depth) *
-              (pad.isAmbient ? 1.4 : .7);
+              (pad.isAmbient ? 1.4 : .7) *
+              wildlifeReveal;
           pad.driftVelocity += cos(k.heading) * 18.0 * wake * dt;
           if (pad.isAmbient) {
             pad.floatVelocity += sin(k.heading) * 6.5 * wake * dt;
@@ -1593,8 +1660,11 @@ class PondModel {
       // 3. Ambient Pond Current Drift for floating leaves
       if (pad.isAmbient) {
         pad.driftVelocity +=
-            (sin(time * .38 + pad.phase) * 3.8 + wind * 5.0) * dt;
-        pad.floatVelocity += cos(time * .31 + pad.phase) * 1.8 * dt;
+            (sin(ambientTime * .18 + pad.phase) * 3.8 * ambientMotion +
+                wind * 5.0) *
+            dt;
+        pad.floatVelocity +=
+            cos(ambientTime * .15 + pad.phase) * 1.8 * ambientMotion * dt;
       }
 
       // 4. Damped Harmonic Springs
@@ -1670,7 +1740,7 @@ class PondModel {
   }
 
   void _updateRain(double dt) {
-    if (!raining) {
+    if (!raining || weatherReveal <= 0) {
       raindrops.clear();
       return;
     }
@@ -1678,10 +1748,11 @@ class PondModel {
     // Streaks beyond intensity 0.7 are drawn by the renderer only, so the
     // physical drop count and the 34-ripple cap stay bounded.
     final intensity = rainIntensity;
-    final targetCount = (6 + 36 * intensity).round();
-    final spawnRate = 20.0 + 90.0 * intensity;
-    final toSpawn = (spawnRate * dt + (_fxRandom.nextDouble() < .4 ? 1 : 0))
-        .floor();
+    final targetCount = ((6 + 36 * intensity) * weatherReveal).ceil();
+    final spawnRate = (20.0 + 90.0 * intensity) * weatherReveal;
+    final toSpawn =
+        (spawnRate * dt + (_fxRandom.nextDouble() < .4 * weatherReveal ? 1 : 0))
+            .floor();
 
     for (var i = 0; i < toSpawn && raindrops.length < targetCount; i++) {
       final ty =
@@ -1805,6 +1876,7 @@ class PondModel {
   }
 
   void _updateWildlife(double dt) {
+    dt *= .005 + .995 * wildlifeReveal;
     for (final k in koi) {
       k.startleTimer = max(0, k.startleTimer - dt * .85);
       final speedBoost = 1.0 + k.startleTimer * 2.4;
@@ -2030,8 +2102,7 @@ class FrogState {
   int get targetLeaf => _targetLeaf;
 
   /// Ground-plane Y coordinate on the pond/pad surface directly beneath the frog.
-  double get groundY =>
-      airborne ? (_fromY + (_toY - _fromY) * jumpPhase) : y;
+  double get groundY => airborne ? (_fromY + (_toY - _fromY) * jumpPhase) : y;
 
   /// Vertical height above the pond/pad surface (`0.0` when perched or swimming).
   double get altitude => airborne ? max(0.0, groundY - y) : 0.0;

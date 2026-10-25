@@ -100,6 +100,8 @@ void main() {
       }
       final m1 = _firstWith((m) => m.weather == 'storm');
       final m2 = PondModel(seed: m1.sceneSeed, durationOverride: 20);
+      m1.press(); m1.release(); m2.press(); m2.release();
+      m1.update(10); m2.update(10);
       for (var i = 0; i < 100; i++) {
         m1.update(1 / 60);
       }
@@ -596,7 +598,7 @@ void main() {
         SceneGrade.matrixFor(daylight: .8, biome: 'maple', cloud: 1),
       );
       expect(cloudy, lessThan(clear * .8));
-      final storm = _firstWith((m) => m.weather == 'storm');
+      final storm = _firstWith((m) => m.weather == 'storm')..progress = 1;
       expect(SceneGrade.filterFor(storm), isNotNull);
       final noon = _firstWith(
         (m) => m.weather == 'clear' && m.cycle == 'dusk',

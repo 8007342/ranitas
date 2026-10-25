@@ -867,13 +867,15 @@ class FoliagePainter {
       final windLean =
           (w * leanPerWind + tell) * spec.windResponse * (.35 + .65 * f);
       final ambient =
-          math.sin(m.time * (2 * math.pi / (2.6 + k * .3)) + b.phase + k * .7) *
+          math.sin(
+            m.ambientTime * (2 * math.pi / (9 + k * .7)) + b.phase + k * .7,
+          ) *
           (.025 + .03 * f);
       // Rotating a segment moves its tip perpendicular to it, so a wind
       // blowing right (+x) needs the angle to shrink on both sides: it lifts
       // a left branch (pointing with the wind) and pushes a right branch
       // (pointing into it) down, like a flag. −x wind does the reverse.
-      final lean = -windLean + ambient;
+      final lean = (-windLean + ambient) * m.foliageMotion;
       out.add(lean.clamp(-FoliageGeometry.maxLean, FoliageGeometry.maxLean));
     }
     return out;
@@ -884,8 +886,9 @@ class FoliagePainter {
     if (reducedMotion) return 0;
     final lag = bush.x / 641 * frontCrossing * (m.wind >= 0 ? 1 : -1);
     final w = _trace.at(m.time - lag.abs());
-    final ambient = math.sin(m.time * 1.1 + bush.phase) * .02;
-    return (w * .35 + m.windTell * .02 * (m.wind >= 0 ? 1 : -1) + ambient)
+    final ambient = math.sin(m.ambientTime * .32 + bush.phase) * .02;
+    return ((w * .35 + m.windTell * .02 * (m.wind >= 0 ? 1 : -1) + ambient) *
+            m.foliageMotion)
         .clamp(-.3, .3);
   }
 
@@ -959,12 +962,9 @@ class FoliagePainter {
         for (final leaf in k.leaves) {
           final flutter = reducedMotion
               ? 0.0
-              : math.sin(m.time * hz * 2 * math.pi + leaf.phase) *
-                    (.06 + .35 * windy);
-          final flip =
-              !reducedMotion &&
-              windy > .02 &&
-              math.sin(m.time * hz * 2 * math.pi + leaf.phase) > .93;
+              : math.sin(m.ambientTime * hz * math.pi * .5 + leaf.phase) *
+                    (.06 + .15 * windy) *
+                    m.foliageMotion;
           final rot = leaf.rotation + swing + flutter;
           final cos = math.cos(swing);
           final sin = math.sin(swing);
@@ -976,7 +976,7 @@ class FoliagePainter {
             colors,
             i++,
             atlas,
-            row: (k.small ? 1 : 0) + (flip ? 2 : 0),
+            row: k.small ? 1 : 0,
             column: leaf.column,
             x: x,
             y: y,
@@ -1043,17 +1043,15 @@ class FoliagePainter {
     final bushes = near ? model.nearBushes : model.midBushes;
     if (bushes.isEmpty) return;
     final night = (1 - m.daylight).clamp(0.0, 1.0);
-    final nightBucket = (night * 6).round();
+    // Cache only neutral geometry. All daylight/cloud tint is applied below
+    // every frame, so the cache never introduces a lighting step.
+    const nightBucket = 0;
     if (nightBucket != _bodyNight) {
       _clearBodies();
       _bodyNight = nightBucket;
     }
     final slot = (near ? 7 : 0) + nightBucket;
-    final tint = SceneGrade.matrixFor(
-      daylight: m.daylight,
-      biome: m.biome,
-      cloud: m.cloudDarkening,
-    );
+    const tint = SceneGrade.identity;
     final body = _bodies[slot] ??= _bakeBodies(bushes, spec, tint);
     final n = bushes.fold(0, (a, b) => a + b.leaves.length);
     final transforms = Float32List(n * 4);
@@ -1077,15 +1075,11 @@ class FoliagePainter {
     c.translate(0, -356);
     _paint
       ..color = ui.Color.fromRGBO(255, 255, 255, reveal)
-      ..colorFilter = null
+      ..colorFilter = grade
       ..blendMode = ui.BlendMode.srcOver;
-    if (reveal >= .999) {
-      c.drawPicture(body);
-    } else {
-      c.saveLayer(null, _paint);
-      c.drawPicture(body);
-      c.restore();
-    }
+    c.saveLayer(null, _paint);
+    c.drawPicture(body);
+    c.restore();
     c.restore();
     for (final b in bushes) {
       final shear = bushShear(b, m);
@@ -1094,19 +1088,16 @@ class FoliagePainter {
         final up = -leaf.dy * b.scale;
         final flutter = reducedMotion
             ? 0.0
-            : math.sin(m.time * hz * 2 * math.pi + leaf.phase) *
-                  (.04 + .3 * windy);
-        final flip =
-            !reducedMotion &&
-            windy > .02 &&
-            math.sin(m.time * hz * 2 * math.pi * .5 + leaf.phase) > .95;
+            : math.sin(m.ambientTime * hz * math.pi * .5 + leaf.phase) *
+                  (.04 + .12 * windy) *
+                  m.foliageMotion;
         _instance(
           transforms,
           rects,
           colors,
           i++,
           atlas,
-          row: (b.near ? 0 : 1) + (flip ? 2 : 0),
+          row: b.near ? 0 : 1,
           column: leaf.column,
           x: b.x + leaf.dx * b.scale + up * shear + breath.dx,
           y: b.y - up + breath.dy,
@@ -1208,13 +1199,14 @@ class FoliagePainter {
   }) {
     final src = atlas.rect(row, column);
     final half = src.width * .5;
-    // Rotations tick in 1/24 turns so pixels stay on a few crisp grids.
-    final q = (rotation / (math.pi / 12)).round() * (math.pi / 12);
+    // Continuous transforms let a small breeze move through subpixel steps.
+    final q = rotation;
     final scos = math.cos(q) * scale;
     final ssin = math.sin(q) * scale;
-    // RSTransform anchors the cell centre on (x, y), snapped to the grid.
-    final tx = x.roundToDouble() - scos * half + ssin * half;
-    final ty = y.roundToDouble() - ssin * half - scos * half;
+    // Keep the cell centre continuous; texture filtering handles fractional
+    // positions without a whole-pixel/15-degree pop.
+    final tx = x - scos * half + ssin * half;
+    final ty = y - ssin * half - scos * half;
     final t = i * 4;
     transforms[t] = scos;
     transforms[t + 1] = ssin;
@@ -1239,6 +1231,7 @@ class FoliagePainter {
     if (count == 0) return;
     _paint
       ..color = const ui.Color(0xffffffff)
+      ..filterQuality = ui.FilterQuality.low
       ..colorFilter = grade
       ..blendMode = ui.BlendMode.srcOver;
     c.drawRawAtlas(

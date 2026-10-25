@@ -47,6 +47,25 @@ Future<Uint8List> _rasterise(void Function(ui.Canvas c) draw) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('a partly revealed cycle keeps constant opacity across its wrap', () async {
+    final cycle = await PaletteCycle.bake(CycleSpec(
+      id: 'fade-regression', rect: const ui.Rect.fromLTWH(0, 0, 4, 4),
+      ramp: const [0xff204080, 0xff80a0c0], fps: 1,
+      generator: (w, h, slots, seed) => Uint8List.fromList(List.filled(w * h, 1)),
+    ));
+    final alphas = <int>[];
+    for (final t in [0.0, .5, .9999, 1.0, 1.9999, 2.0]) {
+      final recorder = ui.PictureRecorder();
+      cycle.draw(ui.Canvas(recorder), t, strength: .3);
+      final picture = recorder.endRecording(), image = await picture.toImage(4, 4);
+      final pixels = (await image.toByteData())!.buffer.asUint8List();
+      alphas.add(pixels[3]);
+      image.dispose(); picture.dispose();
+    }
+    for (final alpha in alphas) { expect(alpha, inInclusiveRange(75, 77)); }
+    cycle.dispose();
+  });
+
   const spec = CycleSpec(
     id: 'test',
     rect: ui.Rect.fromLTWH(100, 50, 8, 12),

@@ -24,6 +24,24 @@ const { thunderPlan, parseSpecies, thunderLimits: L } = audio;
 // A deterministic draw sequence for `rnd`.
 const draws = (...values) => { let i = 0; return () => values[i++ % values.length]; };
 
+test('ten-second master fade and three-minute staggered orchestration', () => {
+  assert.ok(Object.values(audio.soundLayers(0)).every(v => v === 0));
+  assert.equal(audio.soundLayers(5).master, 0.5);
+  assert.equal(audio.soundLayers(10).master, 1);
+  assert.equal(audio.soundLayers(10).insects, 0);
+  assert.equal(audio.soundLayers(50).frogs, 0);
+  assert.equal(audio.soundLayers(100).distant, 0);
+  assert.ok(audio.soundLayers(150).distant < 1);
+  assert.ok(Object.values(audio.soundLayers(180)).every(v => v === 1));
+  for (let t = 0; t < 240; t += .1) {
+    const a = audio.soundLayers(t), b = audio.soundLayers(t + .1);
+    for (const key of Object.keys(a)) {
+      assert.ok(b[key] >= a[key] && b[key] <= 1);
+      assert.ok(b[key] - a[key] < .019, 'no abrupt entrance');
+    }
+  }
+});
+
 test('below the downpour threshold thunder stays a distant rumble', () => {
   for (const rain of [0, 0.3, 0.6, 0.74]) {
     const plan = thunderPlan(rain, 100, -Infinity, draws(0, 0.5));
