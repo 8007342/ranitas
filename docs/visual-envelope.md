@@ -133,6 +133,43 @@ below.
 | Q18 | JEV retraining | Not needed now; optional polish |
 | Q19 | Sheet re-quantisation | Not done; requested |
 
+## Implementation status (2026-10-25)
+
+All of the code for this change is built on `work/visual-envelope`. That branch
+merges `work/pond-atmosphere`, `work/pond-layers` and `work/pond-pads-depth`
+onto `work/visual-envelope-specs`. `flutter analyze` is clean and all 61 tests
+pass.
+
+**Deviations from the design** (details under "As implemented" in each design
+section):
+
+- **Pad slide constants:** pad landing momentum uses η = 0.2 and linear drag
+  1.6 s⁻¹ instead of 0.08 and 1.2. With the seeded hop speeds (60–200 px/s) the
+  design values gave 1–2 px slides.
+- **Ambient pad sections:** these shrink to the free room in the basin,
+  typically 1–9 px, so ambient leaves wander less than designed.
+- **Visiting perch:** when a frog visits the other pad it perches at the rim,
+  so hero landings now mostly hit the "edge" zone.
+- **Emissive masks:** these were generated for 6 of the 12 backdrops (both
+  grottos, both sanctuaries, firefly, willow). On the others the key caught
+  petals, sun glitter or dithered sky, so those stay on plain grading.
+- **Alpine stream:** alpine has no painted stream, so its `stream` cycle
+  animates the far-shore water line.
+- **Glow cycles:** the fungi and lantern cycles are additive halos, not pixel
+  replacement.
+- **Far-bank slot:** reserved; it has no procedural content yet.
+- **Night insects:** they switch on at a daylight threshold. The smoothness
+  comes from the existing 1/s fade-in.
+
+**Visual check:** this was done on offscreen renders of every biome from the
+smoke test, not in a browser or on a device.
+
+- **Fixed:** a procedural top-centre bough read as a garland. It now sits just
+  above the frame, and alpine has none.
+- **Still visible:** procedural canopy colours are lighter and crisper than the
+  painted backdrops, most noticeably the sanctuary bamboo. Painted canopy
+  layers (`art/ASSET_REQUESTS.md` §2) are the intended fix.
+
 ## Open questions
 
 1. Should clear or mist sessions ever develop passing showers? That would

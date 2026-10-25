@@ -317,8 +317,8 @@ class CanopyGeometry {
       }
     }
 
-    // A wavy branch along the top edge of the centre zone that the centre
-    // clusters hang from; it never drops below y = 10.
+    // A wavy branch just above the top edge of the centre zone: only the
+    // clusters hanging from it show, so it never reads as a garland.
     void topBough(int variant, {double thickness = 2}) {
       final points = <ui.Offset>[];
       for (var i = 0; i <= 8; i++) {
@@ -328,7 +328,7 @@ class CanopyGeometry {
             SceneLayers.laneLeft -
                 12 +
                 f * (SceneLayers.laneRight - SceneLayers.laneLeft + 24),
-            2 + 4 * (1 - math.cos(f * math.pi * 2 + random.nextDouble() * .4)),
+            -12 + 4 * (1 - math.cos(f * math.pi * 2 + random.nextDouble() * .4)),
           ),
         );
       }
@@ -660,17 +660,7 @@ class CanopyGeometry {
           perCluster: 1,
           variant: 7,
         );
-        topBough(6);
-        for (var i = 0; i < 6; i++) {
-          clusters.add(
-            Cluster(
-              centreX((i + .5) / 6),
-              4 + random.nextDouble() * 10,
-              4 + random.nextDouble() * 3,
-              random.nextInt(3),
-            ),
-          );
-        }
+        // Alpine keeps the top centre open sky: pine tufts only at the sides.
     }
     return CanopyModel(
       kind: kind,

@@ -76,3 +76,36 @@ Each frog transitions smoothly across **10 distinct visual states** driven by de
    - Initial crown splash droplets (`bellyFlop > 0`), followed by a submerged-body frog-kick cycle: eyes and nose poking above the water line, rhythmic alternating hind-leg breaststroke kicks (`sin(swimAge * 14)`), and trailing V-shaped wake ripples back to the pad.
 10. **`sleeping` (Synchronized Rest)**:
     - Curled loaf posture on the home lily pad: limbs tucked snugly against the body, eyelids closed with peaceful curved lashes, slow deep breathing, and floating pixel `z Z` marks.
+
+---
+
+## 4. Visual Envelope Systems (light, layers, pads, depth)
+
+The [`visual-envelope`](../openspec/changes/visual-envelope/design.md) change
+adds the following systems. Each painted asset they can use is optional and
+listed in [ASSET_REQUESTS.md](ASSET_REQUESTS.md). When a file is missing, a
+procedural fallback draws instead.
+
+- **Time-of-day grade** (`lib/game/scene_grade.dart`): colour-matrix keyframes
+  for day → sunset → dusk → night, keyed on `daylight`, with per-biome night
+  keys and rain cloud darkening. They grade the backdrop, painted layers,
+  non-emissive palette cycles and procedural canopy colours.
+- **Emissive masks** (`emissive-<backdrop>.webp`, `npm run art:emissive`):
+  where a mask exists, painted light sources add their light back as the scene
+  darkens.
+- **Palette cycling** (`lib/game/palette_cycle.dart`): index map + ramp regions
+  baked to frames, with blended or stepped playback. Reduced motion freezes
+  them.
+- **Layer stack** (`lib/game/scene_layers.dart`): far bank, mid bank, canopy,
+  near corner and particle slots per biome. The canopy hangs from the top edge
+  and keeps the central 50 % of the width clear below 30 % of the height.
+- **Rain envelope and night insects** (`lib/game/rain_envelope.dart`,
+  `lib/game/insect_species.dart`).
+- **Pads and frog depth** (`lib/game/pond_model.dart`,
+  `lib/game/frog_sprites.dart`):
+  - Pads are laid out from the seed and slide on the current inside bounded
+    sections.
+  - A shared perspective law (`0.56 + 0.48·depth`) sizes pads and frogs.
+  - Frogs pick side, away or toward poses from the jump direction.
+  - Hero pads no longer sit at the fixed `x/y` homes listed in §1. Those values
+    are now only typical positions.

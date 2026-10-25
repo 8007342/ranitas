@@ -33,6 +33,6 @@
 
 ## 5. Integration (branch `work/visual-envelope`)
 
-- [ ] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
-- [ ] 5.2 Update styleguides and README for the new systems
-- [ ] 5.3 Visual check in a browser build and capture screenshots
+- [x] 5.1 Merge 2–4, resolve conflicts, `flutter analyze` and `flutter test` clean
+- [x] 5.2 Update styleguides and README for the new systems
+- [x] 5.3 Visual check of rendered frames for every biome (offscreen renders, not a browser; see docs/visual-envelope.md)
