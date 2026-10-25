@@ -59,24 +59,24 @@ Tap, low and high SHALL use durations 0.68, 0.95 and 1.30 seconds and sine-arc h
 
 ### Requirement: Bounded adaptive foreground duration
 
-Normal active sessions SHALL adapt within 180–360 foreground simulation seconds, starting with a 240 s target. Engagement SHALL be a local interaction-rate proxy, never a claim about emotion. Accepted releases MAY extend the target within its bound but SHALL NOT reset elapsed time. Preview/test duration overrides SHALL remain separate from normal play.
+Normal active sessions SHALL adapt within 240–300 foreground simulation seconds, starting with a 240 s target. The final decorative and audio layers SHALL be fully introduced by 180 seconds, reserving at least one minute of fully awakened play. Engagement SHALL be a local interaction-rate proxy, never a claim about emotion. Accepted releases MAY extend the target within its bound but SHALL NOT reset elapsed time. Preview/test duration overrides SHALL remain separate from normal play.
 
 #### Scenario: Implemented adaptation rule
 
 - **GIVEN** a normal session with no duration override
 - **WHEN** a release is accepted
 - **THEN** engagement increases by 0.075, capped at 1
-- **AND** each active update decays engagement by `exp(-dt/18)` and moves duration toward `180 + 180*engagement` by factor `1-exp(-dt/12)`, clamping duration to 180–360 s.
+- **AND** each active update decays engagement by `exp(-dt/18)` and moves duration toward `240 + 60*engagement` by factor `1-exp(-dt/12)`, clamping duration to 240–300 s.
 
 #### Scenario: Idle and sustained interaction both finish
 
 - **WHEN** running one session with only its initial gesture and another with frequent accepted releases
-- **THEN** each enters settling when elapsed reaches its current duration, no later than 360 foreground simulation seconds plus one 1/60 s step
+- **THEN** each enters settling when elapsed reaches its current duration, no later than 300 foreground simulation seconds plus one 1/60 s step
 - **AND** neither can be prolonged indefinitely by interaction.
 
 ### Requirement: Monotone enrichment into dusk or dawn
 
-Scene richness SHALL follow monotone smoothed session progress. The seeded cycle SHALL be dusk with probability 75% or dawn with probability 25%. Palette and environmental detail SHALL develop gradually without lightning flashes, flicker or scene cuts. The cycle SHALL retain its endpoint after sleep. No requirement SHALL depend on a human failing to notice a change.
+Scene richness SHALL rise monotonically over the first 180 foreground play seconds, independently of the adaptive session endpoint. Decorative motion and audio layers SHALL enter on overlapping quintic curves, with a ten-second master audio fade. The seeded cycle SHALL be dusk with probability 75% or dawn with probability 25%. Palette and environmental detail SHALL develop gradually without lightning flashes, flicker or scene cuts. The completed scene SHALL keep living after sleep. No requirement SHALL depend on a human failing to notice a change.
 
 #### Scenario: Adaptation never reverses the scene
 
@@ -175,7 +175,8 @@ The scene SHALL choose `willow`, `blossom`, `cypress`, `maple`, `sanctuary`, `gr
 #### Scenario: Gust warning and storm sound
 
 - **WHEN** a gust starts after the initial 12 s clock
-- **THEN** a 1.8 s wind tell precedes its 3 s sine gust with peak magnitude 0.85
+- **THEN** a smooth two-second wind tell overlaps a broad twelve-second gust, with a peak gust contribution of 0.24 and a continuous ambient baseline no larger than 0.06
+- **AND** wind and its forecast have no discontinuity at their handoff and continue after the frogs sleep
 - **AND** subsequent intervals are 16–36 s, or 10–30 s in storm
 - **WHEN** storm audio is active
 - **THEN** distant thunder may sound without a flash, using the current 22–45 s scheduling interval and 3.5 s low-pass noise voice

@@ -12,6 +12,8 @@ All twelve backdrops have editable emissive mask sources. Maple, autumn mist
 and cypress intentionally have empty masks because their paintings contain no
 light sources. Blossom, lotus and alpine use locally isolated star masks;
 the existing six keyed masks retain their lantern, fungus and moon coverage.
+Star-bearing scenes now use isolated core masks without a dilated sky halo;
+the radial star index overlays are retained as source data but no longer drawn.
 The 56 cycle maps are numeric lookup textures exported from the canonical
 region table with `npm run art:cycles`, preserving exact grayscale slots.
 

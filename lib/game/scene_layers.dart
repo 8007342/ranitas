@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'foliage.dart';
 import 'pond_model.dart';
 import 'scene_grade.dart';
+import 'awakening.dart';
 
 /// Where a layer sits in the renderer's tier order (design D5).
 enum LayerSlot {
@@ -709,8 +710,6 @@ class SceneLayerPainter {
   CanopyModel? _canopy;
   String? _canopyKey;
   final List<ui.Picture?> _frames = List.filled(phaseBuckets, null);
-  int _frameNight = -1;
-  int _frameAlpha = -1;
   List<_Spark> _sparks = const [];
   int? _sparkSeed;
 
@@ -760,21 +759,27 @@ class SceneLayerPainter {
   double shearFor(PondModel m, SceneLayer layer) {
     if (reducedMotion) return 0;
     final tell = m.wind == 0 ? 0.0 : m.windTell * m.wind.sign;
-    return ((m.wind * .6 + tell * .032) * layer.windResponse * layer.depth)
+    return ((m.wind * .6 + tell * .032) *
+            layer.windResponse *
+            layer.depth *
+            m.foliageMotion)
         .clamp(-maxShear, maxShear);
   }
 
   ui.Offset _breath(PondModel m, SceneLayer layer) {
     if (reducedMotion) return ui.Offset.zero;
-    final a = m.time * math.pi * 2 / breathPeriod;
+    final a = m.ambientTime * math.pi * 2 / breathPeriod;
     return ui.Offset(
-      math.sin(a) * breathAmplitude * layer.depth,
-      math.cos(a) * breathAmplitude * .3 * layer.depth,
+      math.sin(a) * breathAmplitude * layer.depth * m.foliageMotion,
+      math.cos(a) * breathAmplitude * .3 * layer.depth * m.foliageMotion,
     );
   }
 
-  double _reveal(PondModel m, SceneLayer layer) =>
-      ((m.richness - layer.revealAt) / .25).clamp(0.0, 1.0);
+  double _reveal(PondModel m, SceneLayer layer) => Awakening.reveal(
+    m.awakeningSeconds,
+    15 + layer.revealAt * 75,
+    120 + layer.revealAt * 150,
+  );
 
   void drawSlot(ui.Canvas c, LayerSlot slot, PondModel m, double motion) {
     for (final layer in stackFor(m)) {
@@ -799,7 +804,7 @@ class SceneLayerPainter {
   /// declares a layer in that slot, so it runs after the declared layers.
   void _foliage(ui.Canvas c, PondModel m, LayerSlot slot) {
     foliage.reducedMotion = reducedMotion;
-    final reveal = ((m.richness - foliageRevealAt) / .25).clamp(0.0, 1.0);
+    final reveal = m.foliageMotion;
     if (reveal <= 0) return;
     final grade = tintFor(m);
     switch (slot) {
@@ -928,7 +933,7 @@ class SceneLayerPainter {
       c.drawImageRect(
         image,
         ui.Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        ui.Rect.fromLTWH(breath.dx, breath.dy, _width, _height),
+        const ui.Rect.fromLTWH(0, 0, _width, _height),
         _paint,
       );
       _paint.colorFilter = null;
@@ -996,12 +1001,16 @@ class SceneLayerPainter {
     if (image != null) {
       final sway = reducedMotion
           ? 0.0
-          : math.sin(m.time * math.pi * 2 / swayPeriod) * 1.5 * layer.depth;
+          : math.sin(m.ambientTime * math.pi * 2 / 18) *
+                1.5 *
+                layer.depth *
+                m.foliageMotion;
       c.save();
-      c.translate(breath.dx + sway, breath.dy);
-      c.skew(shear, 0);
+      final mineral = m.biome == 'grotto' || m.biome == 'crystal_grotto';
+      c.translate(mineral ? 0 : breath.dx + sway, mineral ? 0 : breath.dy);
+      if (!mineral) c.skew(shear, 0);
       _paint
-        ..filterQuality = ui.FilterQuality.none
+        ..filterQuality = mineral ? ui.FilterQuality.none : ui.FilterQuality.low
         ..color = ui.Color.fromRGBO(255, 255, 255, reveal)
         ..colorFilter = tintFor(m);
       c.drawImageRect(
@@ -1017,26 +1026,26 @@ class SceneLayerPainter {
     final canopy = canopyFor(m);
     if (canopy == null) return;
     final night = (1 - m.daylight).clamp(0.0, 1.0);
-    final nightBucket = (night * 6).round();
-    final alphaBucket = (reveal * 6).round();
-    if (nightBucket != _frameNight || alphaBucket != _frameAlpha) {
-      _clearFrames();
-      _frameNight = nightBucket;
-      _frameAlpha = alphaBucket;
-    }
-    final phase = reducedMotion ? 0.0 : (m.time / swayPeriod) % 1;
-    final bucket = (phase * phaseBuckets).floor() % phaseBuckets;
-    final picture = _frames[bucket] ??= _bakeCanopy(
+    // Cache geometry without baked lighting/opacity. Grade continuously at
+    // draw time instead of flashing whenever a night/alpha bucket changes.
+    final picture = _frames[0] ??= _bakeCanopy(
       canopy,
-      bucket / phaseBuckets,
-      alphaBucket / 6,
-      _tintColor(m),
+      0,
+      1,
+      SceneGrade.identity,
       jade: m.biome == 'jade_sanctuary',
     );
     c.save();
     c.translate(breath.dx, breath.dy);
     c.skew(shear, 0);
+    c.saveLayer(
+      null,
+      ui.Paint()
+        ..color = ui.Color.fromRGBO(255, 255, 255, reveal)
+        ..colorFilter = tintFor(m),
+    );
     c.drawPicture(picture);
+    c.restore();
     c.restore();
     _canopyLive(c, m, canopy, layer, shear, breath, reveal, night);
   }
@@ -1400,12 +1409,10 @@ class SceneLayerPainter {
   void _foreground(ui.Canvas c, PondModel m, SceneLayer layer) {
     final image = foregroundImage;
     if (image == null) return;
-    final opacity = (m.richness - layer.revealAt).clamp(0.0, 1.0) * .68;
+    final opacity = _reveal(m, layer) * .68;
     if (opacity <= 0) return;
-    final sway = reducedMotion
-        ? 0.0
-        : math.sin(m.time * .18) * _width * .003 * m.richness;
-    final breath = _breath(m, layer);
+    // A painted layer includes stones, mushrooms and roots. Keep its ground
+    // fixed; independent leaf sprites above it carry the gentle motion.
     _paint
       ..filterQuality = ui.FilterQuality.none
       ..color = ui.Color.fromRGBO(255, 255, 255, opacity)
@@ -1414,8 +1421,8 @@ class SceneLayerPainter {
       image,
       ui.Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       ui.Rect.fromLTWH(
-        -_width * .01 + sway + breath.dx,
-        _height * .14 + breath.dy,
+        -_width * .01,
+        _height * .14,
         _width * 1.02,
         _height * .86,
       ),

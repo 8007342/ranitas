@@ -16,17 +16,21 @@ Load the script synchronously before Flutter in the page bootstrap:
 ```
 
 Import `lib/audio/ambience.dart` and retain one `PondAmbience` for the game.
-Call `update(progress, richness, weather, sleeping, {rainIntensity, species})`
+Call `update(progress, richness, weather, sleeping, {rainIntensity, species, elapsedSeconds})`
 as game state changes. Progress and richness accept normalized numbers; invalid
 numbers become zero. Progress is reserved for future scene evolution; richness
-controls overall gain and frog density. Weather strings containing
+controls overall gain and density. `elapsedSeconds` follows foreground play
+time: the master fades from silence over ten seconds, while water, breeze,
+rain, insect voices, frogs and distant calls enter on staggered smooth curves
+over three minutes. See [the choreography](quiet-awakening.md). The completed
+mix remains present after sleep. Weather strings containing
 rain/storm/thunder (or lluvia/tormenta) enable full rain; drizzle uses 35% rain
 gain and a gentler wind increase. Storm/thunder/tormenta also enable thunder.
-Sleeping softens overall gain and adds occasional owl calls.
+Sleeping permits occasional owl calls without dropping the finished mix level.
 
-The two named arguments are optional at both ends; the JavaScript `update`
-accepts the old four-argument form and then behaves as before (distant thunder
-only, no insect voices).
+The additional arguments are optional at both ends. JavaScript accepts the old
+four-argument form, derives a reveal time from richness, and retains distant
+thunder without species voices when those arguments are omitted.
 
 **Thunder follows the rain.** `rainIntensity` (0–1, the model's rain envelope)
 shapes thunder while the storm label is active. A pure `thunderPlan(rain, now,

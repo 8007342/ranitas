@@ -131,6 +131,7 @@ void main() {
       final layer = SceneLayers.stackFor('willow')
           .firstWhere((l) => l.canopy != null);
       expect(painter.shearFor(model, layer), 0);
+      model.progress = 1; // Fully revealed test session.
       model.wind = .08;
       model.windTell = 1;
       final gust = painter.shearFor(model, layer);
@@ -152,7 +153,8 @@ void main() {
         model.release();
         model.update(6);
         expect(model.richness, greaterThan(.3), reason: biome);
-        model.wind = .08;
+        model.progress = 1; // Fully revealed test session.
+      model.wind = .08;
         model.windTell = 1;
         final cycles = <PaletteCycle>[];
         for (final spec in PaletteCycles.specsFor(model.backdropAsset)) {

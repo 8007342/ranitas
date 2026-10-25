@@ -10,6 +10,7 @@ class PondAmbience {
     bool sleeping, {
     double rainIntensity = 0,
     String species = '',
+    double elapsedSeconds = 0,
   }) {}
   void suspend() {}
   void resume() {}

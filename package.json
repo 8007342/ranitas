@@ -12,7 +12,10 @@
     "art:emissive": "node scripts/make-emissive.mjs && node scripts/complete-emissive.mjs && node scripts/prepare-art.mjs",
     "train:policy": "node scripts/train-policy.mjs",
     "art:cycles": "flutter test tool/export_cycle_maps.dart",
-    "check:art": "node scripts/check-painted-art.mjs"
+    "check:art": "node scripts/check-painted-art.mjs",
+    "test:controls": "node --test scripts/controls.test.mjs",
+    "test:fast": "flutter test --exclude-tags soak",
+    "test:soak": "flutter test --tags soak"
   },
   "devDependencies": {
     "sharp": "^0.35.5",

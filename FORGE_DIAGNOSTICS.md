@@ -257,3 +257,96 @@ because nothing better is advertised.
 - Advertise the Flutter wrapper and a `publish_local` → `browser_open` →
   screenshot/console/network recipe in startup tooling guidance. Both worked
   here and address the browser-validation gap documented in the prior session.
+
+## Quiet awakening and visual corrections — 2026-10-25
+
+### What went well
+
+- Retained art sources, exact asset contracts and optional loaders made it
+  possible to correct the star masks, blinks and scenery without regenerating
+  the entire art set. The previous branch integration remained clean.
+- The host browser supported actual trusted pointer/keyboard input and page
+  fullscreen. Verified F and Escape each exited fullscreen, and R disposed
+  the old soundscape and loaded a different unseeded scene. Console and asset
+  requests remained clean. A real-time storm visit reached the full reveal
+  and sleep; its star no longer carried the old noisy sky patch.
+- Regression coverage now includes 250 seeded foot-support checks, open/closed
+  sprite render pairs, constant opacity across a palette-cycle wrap, anchored
+  rock layers, continuous night lighting, staged entrances and smooth gusts
+  that continue after sleep. The updated fast suite passed 96 tests, the
+  100-seed/30-minute post-sleep soak passed separately, and 13 Web Audio/control
+  tests passed. Static analysis and all 132 asset contracts passed.
+- The final production build has 182 files, 61.16 MiB total, all below the
+  25 MiB individual-file limit. Headless mode cannot provide a subjective
+  listening review; audio fade/orchestration was checked programmatically.
+
+### What required figuring out
+
+- The visible glitches had several independent causes: procedural face
+  coordinates over a replacement sprite atlas; visitor perches deliberately
+  near the pad rim; rigid rocks sharing the transform of a whole painted
+  layer; 15-degree rotation/origin snapping; bright leaf flip frames; and
+  cached lighting tied to coarse night buckets.
+- Two translucent source-over animation frames do not retain the intended
+  opacity when each is faded separately. Their accumulated alpha changed with
+  cycle phase. Composing the interpolation first and fading once fixed the
+  brightness change at the cycle wrap. The same issue affected blink eyelids
+  on distant translucent frogs and required composing the whole frog once.
+- The master fade is separate from orchestration: its nominal level now
+  arrives in ten seconds, while additional sound families and visual layers
+  enter over three minutes. Production sessions have a four-minute minimum;
+  short explicit test sessions compress the reveal proportionally.
+- Layer ownership matters: stones and mineral canopies stay anchored while
+  leaf sprites retain motion. New weather is drawn behind the playable pond,
+  with shared cloud shadows over mountains/far water and muted coherent
+  V-wing flocks that read differently from foreground insects.
+
+### What required fixing
+
+- Added source-grid eye anchors and clipped eyelids; removed the old painted
+  frog throat/cheek/eye overlays. Visual blink checks also exposed opacity
+  accumulation, which a position-only assertion would have missed.
+- Replaced rim offsets with centered perches and a full foot-span constraint
+  inside the pad ellipse. Updated old tests that required separated frog
+  silhouettes, edge folding or large immediate rotation: those expectations
+  contradicted the owner's new priorities.
+- Replaced linear/bucketed entrances with bounded quintic curves. Floating
+  point evaluation near an endpoint could exceed one by a few ulps; explicit
+  output clamping fixed that invariant in both Dart and JavaScript.
+- Removed the wind forecast/gust handoff discontinuity, broadened gusts to
+  twelve seconds, and kept the breeze alive after sleep. Continuous transforms
+  and light texture filtering replace abrupt foliage snapping.
+- Added page capture-phase fullscreen/random-refresh shortcuts so Flutter
+  focus does not suppress them; browser modifier shortcuts remain intact.
+
+### What did not work directly
+
+- `flutter test --exclude-tags soak` initially still ran the long simulation:
+  that test had no tag. It is now tagged, with `npm run test:fast` and
+  `npm run test:soak` commands. The final isolated soak took 5:43 wall time;
+  targeted iteration is much cheaper than repeatedly running it.
+- Several research pages returned 403/502/503 or redirected to maintenance.
+  Primary research remained available through the publisher abstracts and the
+  open PMC article. The design notes distinguish that evidence from artistic
+  timing choices and explicitly identify the GDC abstract-only access.
+- Still-image smoke tests alone had missed the original temporal artifacts.
+  Time-adjacent image comparisons and alpha/lighting invariants caught issues
+  that ordinary successful rendering did not.
+
+### Improvements for the next run
+
+- Store eye, foot and cell anchors alongside regenerated atlases. A new atlas
+  should trigger a small pose-contact-sheet review before old procedural
+  overlays are allowed to draw over it.
+- Make temporal review part of art integration: inspect opening, entrance,
+  near-complete, complete and sleep states, plus the last/first frames of every
+  loop. Keep metadata-only tool output and inspect bounded image crops.
+- Offer a short bounded video/frame-sequence capture in the host browser for
+  subtle motion review; a screenshot can confirm appearance but not smoothness.
+- Document tagged fast/soak test recipes and foreground-play-time probes in
+  forge guidance. The shared Flutter wrapper, local TLS preview, CDP input,
+  screenshot structured data and console/network tails all worked here.
+- Primary research and implementation judgement are recorded together in
+  `docs/quiet-awakening.md`; future tuning should include real listening and
+  player comfort sessions rather than treating exact timings as scientifically
+  established perceptual thresholds.
