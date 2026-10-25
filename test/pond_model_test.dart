@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ranitas/game/insect_species.dart';
 import 'package:ranitas/game/pond_model.dart';
 
 void tap(PondModel model) {
@@ -157,7 +158,7 @@ void main() {
   );
 
   test(
-    'species unlock with progression and fireflies belong to dusk/night',
+    'species unlock with progression and night sets belong to dusk/night',
     () {
       final model = List.generate(
         100,
@@ -167,10 +168,16 @@ void main() {
       tap(model);
       model.update(8);
       expect(model.availableSpecies, containsAll(['dragonfly', 'butterfly']));
-      expect(model.availableSpecies, isNot(contains('firefly')));
+      expect(
+        model.availableSpecies.any(InsectSpecies.nightNames.contains),
+        isFalse,
+      );
       model.update(4);
       expect(model.period, 'dusk');
-      expect(model.availableSpecies, contains('firefly'));
+      expect(
+        model.availableSpecies.any(InsectSpecies.nightNames.contains),
+        isTrue,
+      );
       model.update(8);
       expect(model.period, 'night');
       expect(model.availableSpecies, isNot(contains('butterfly')));
@@ -284,7 +291,10 @@ void main() {
         expect(model.period, cycle == 'dawn' ? 'dawn' : 'day');
         expect(model.daylight, closeTo(.5, 1e-9));
         if (cycle == 'dawn') {
-          expect(model.availableSpecies, contains('firefly'));
+          expect(
+            model.availableSpecies.any(InsectSpecies.nightNames.contains),
+            isTrue,
+          );
           expect(model.availableSpecies, isNot(contains('butterfly')));
         }
         model.update(10);
@@ -312,11 +322,16 @@ void main() {
         );
         expect(model.bugs, isNotEmpty);
         if (cycle == 'dawn') {
-          expect(model.bugs.any((b) => b.species == 'firefly'), isFalse);
+          expect(
+            model.bugs.any((b) => InsectSpecies.nightNames.contains(b.species)),
+            isFalse,
+          );
         } else {
           expect(
             model.bugs.every(
-              (b) => ['firefly', 'mosquito'].contains(b.species),
+              (b) =>
+                  b.species == 'mosquito' ||
+                  InsectSpecies.nightNames.contains(b.species),
             ),
             isTrue,
           );
@@ -345,14 +360,23 @@ void main() {
       expect(model.bugs.length, lessThanOrEqualTo(7));
       if (weather == 'storm' || weather == 'drizzle') {
         expect(model.availableSpecies, isNot(contains('butterfly')));
-        expect(model.availableSpecies, isNot(contains('firefly')));
+        expect(
+          model.availableSpecies.any(InsectSpecies.nightNames.contains),
+          isFalse,
+        );
         expect(
           model.bugs.every((b) => ['fly', 'mosquito'].contains(b.species)),
           isTrue,
         );
+        // Shelter now follows the rain intensity envelope, so the budget is
+        // checked against the model's own formula rather than a fixed count.
+        expect(model.rainIntensity, greaterThan(0));
+        expect(model.insectShelter, lessThan(1));
+        final budget = ((3 + model.richness * 15) * model.insectShelter).ceil();
+        expect(model.bugs.length, lessThanOrEqualTo(budget + 1));
       }
       if (weather == 'storm') {
-        expect(model.bugs.length, lessThanOrEqualTo(3));
+        expect(model.bugs.length, lessThanOrEqualTo(5));
       }
     }
   });

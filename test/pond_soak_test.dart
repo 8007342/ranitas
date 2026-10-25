@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ranitas/game/pond_model.dart';
 
@@ -134,11 +136,11 @@ void main() {
     for (var seed = 0; seed < 100; seed++) {
       final p = PondModel(seed: seed);
       worlds.add('${p.weather}/${p.cycle}');
-      final cap = p.weather == 'storm'
-          ? 5
-          : p.weather == 'drizzle'
-          ? 10
-          : 18;
+      // Rain shelter follows the seeded intensity envelope, so the budget is
+      // 18 × the most generous shelter seen so far (insects are not culled
+      // when the rain thickens again), with a margin for the 0.8 s check grid.
+      var maxShelter = p.insectShelter;
+      int cap() => (18 * maxShelter).ceil() + 2;
       gesture(p);
       var previousProgress = 0.0;
 
@@ -148,8 +150,10 @@ void main() {
           gesture(p);
         }
         p.update(1);
+        maxShelter = max(maxShelter, p.insectShelter);
         checkGeometry(p, 'seed=$seed t=$second');
-        expect(p.bugs.length, lessThanOrEqualTo(cap));
+        expect(p.rainIntensity, inInclusiveRange(0, 1));
+        expect(p.bugs.length, lessThanOrEqualTo(cap()));
         maximaByWeather.update(
           p.weather,
           (n) => n < p.bugs.length ? p.bugs.length : n,
@@ -174,8 +178,9 @@ void main() {
       for (var second = 0; second < 1800; second++) {
         gesture(p);
         p.update(1);
+        maxShelter = max(maxShelter, p.insectShelter);
         checkGeometry(p, 'seed=$seed sleep+$second');
-        expect(p.bugs.length, lessThanOrEqualTo(cap));
+        expect(p.bugs.length, lessThanOrEqualTo(cap()));
         maximaByWeather.update(
           p.weather,
           (n) => n < p.bugs.length ? p.bugs.length : n,

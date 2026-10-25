@@ -107,9 +107,14 @@ corners only, central water lane fully open.
 | --- | --- | --- |
 | `emissive-<backdrop>.png` | 2557 × 1439 | white = emits light, black = not; grayscale or alpha |
 
-`scripts/make-emissive.mjs` generates first-pass masks automatically. A painted
-mask replaces the generated one for a sharper result. Cover lanterns, glowing
-mushrooms, lit windows, the moon, stars and crystal glints.
+`scripts/make-emissive.mjs` (`npm run art:emissive`) generates first-pass masks
+automatically for `pond-grotto`, `pond-crystal-grotto`, `pond-sanctuary`,
+`pond-jade-sanctuary`, `pond-dusk` and `pond-firefly`. The other six backdrops
+have no mask yet because the automatic key picks petals, sun glitter or dithered
+sky instead of lights (run the script with `--all --preview <dir>` to see why),
+so painted masks are most wanted for those. A painted mask replaces the
+generated one for a sharper result. Cover lanterns, glowing mushrooms, lit
+windows, the moon, stars and crystal glints.
 
 ## 6. Palette-cycle index maps (waterfalls, streams, glows)
 

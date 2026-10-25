@@ -3,12 +3,17 @@ import 'dart:ui' as ui;
 
 import 'frog_sprites.dart';
 import 'pond_model.dart';
+import 'scene_grade.dart';
 
 /// Widescreen pixel pond scenery implementing the 6-Tier Composable Rendering
 /// Architecture (`art/INTERACTION_STYLEGUIDE.md`). The caller retains ownership
-/// of [backdrop], [frogSheets], and [wildlifeSheet].
+/// of [backdrop], [emissive], [frogSheets], and [wildlifeSheet].
 class PondRenderer {
   ui.Image? backdrop;
+
+  /// Optional emissive mask for [backdrop] (alpha = light); null falls back to
+  /// plain grading. See `scripts/make-emissive.mjs`.
+  ui.Image? emissive;
   List<ui.Image?> frogSheets = [null, null];
   ui.Image? wildlifeSheet;
   bool reducedMotion = false;
@@ -193,27 +198,35 @@ class PondRenderer {
     canvas.clipRect(ui.Offset.zero & size);
     canvas.scale(size.width / _width, size.height / _height);
 
-    // TIER 0: Full-bleed Composable Scenic Backdrop & Sky
+    // TIER 0: Full-bleed Composable Scenic Backdrop & Sky, colour-graded
+    // continuously on daylight and rain (scene_grade.dart) instead of a flat
+    // night wash, then emissive lights added back where a mask exists.
     final source = backdrop;
+    final grade = SceneGrade.filterFor(model);
+    const frame = ui.Rect.fromLTWH(0, 0, _width, _height);
     if (source == null) {
-      canvas.drawPicture(_scenery!);
+      if (grade == null) {
+        canvas.drawPicture(_scenery!);
+      } else {
+        canvas.saveLayer(frame, ui.Paint()..colorFilter = grade);
+        canvas.drawPicture(_scenery!);
+        canvas.restore();
+      }
     } else {
+      final sourceRect = ui.Rect.fromLTWH(
+        0,
+        0,
+        source.width.toDouble(),
+        source.height.toDouble(),
+      );
       _paint
         ..color = const ui.Color(0xffffffff)
-        ..filterQuality = ui.FilterQuality.none;
-      canvas.drawImageRect(
-        source,
-        ui.Rect.fromLTWH(
-          0,
-          0,
-          source.width.toDouble(),
-          source.height.toDouble(),
-        ),
-        const ui.Rect.fromLTWH(0, 0, _width, _height),
-        _paint,
-      );
+        ..filterQuality = ui.FilterQuality.none
+        ..colorFilter = grade;
+      canvas.drawImageRect(source, sourceRect, frame, _paint);
+      _paint.colorFilter = null;
+      _emissive(canvas, source, sourceRect, frame, model, night);
     }
-    _rect(canvas, 0, 0, _width, _height, 0xff101f48, .06 + night * .60);
     if (model.cycle == 'dawn') {
       _rect(canvas, 0, 0, _width, 185, 0xffffc68e, progress * .12);
     }
@@ -287,6 +300,47 @@ class PondRenderer {
     _foliage(canvas, model, motion, source != null);
     _motifs(canvas, model, motion, night);
     _weather(canvas, model, motion);
+    canvas.restore();
+  }
+
+  /// Lanterns, fungi, windows, moon and stars survive the night grade: the
+  /// ungraded backdrop, cut to the mask (`dstIn`), is added (`plus`) at
+  /// `night × richness`. Skipped when there is no mask or nothing to add.
+  void _emissive(
+    ui.Canvas canvas,
+    ui.Image source,
+    ui.Rect sourceRect,
+    ui.Rect frame,
+    PondModel model,
+    double night,
+  ) {
+    final mask = emissive;
+    if (mask == null) return;
+    final strength = (night * model.richness.clamp(0.0, 1.0) * .85).clamp(
+      0.0,
+      1.0,
+    );
+    if (strength < .02) return;
+    canvas.saveLayer(
+      frame,
+      ui.Paint()
+        ..blendMode = ui.BlendMode.plus
+        ..color = ui.Color.fromRGBO(255, 255, 255, strength),
+    );
+    canvas.drawImageRect(
+      source,
+      sourceRect,
+      frame,
+      ui.Paint()..filterQuality = ui.FilterQuality.none,
+    );
+    canvas.drawImageRect(
+      mask,
+      ui.Rect.fromLTWH(0, 0, mask.width.toDouble(), mask.height.toDouble()),
+      frame,
+      ui.Paint()
+        ..filterQuality = ui.FilterQuality.none
+        ..blendMode = ui.BlendMode.dstIn,
+    );
     canvas.restore();
   }
 
@@ -974,9 +1028,40 @@ class PondRenderer {
     final y = b.y * _height;
     final wing = reducedMotion ? 1.0 : math.sin(b.phase * 3).abs() * 2 + 1;
     final a = b.opacity;
+    final night = (1 - m.daylight).clamp(0.0, 1.0);
     if (b.species == 'firefly') {
-      _oval(c, x, y, 6, 6, 0xffe5e9a0, a * .09);
+      // Glow widens at night so the lantern-yellow point reads on the grade.
+      _oval(c, x, y, 6, 6, 0xffe5e9a0, a * (.09 + .10 * night));
+      _oval(c, x, y, 3, 3, 0xfffff2b8, a * .18 * night);
       _rect(c, x, y, 2, 2, 0xffffeaa6, a);
+    } else if (b.species == 'glowbeetle') {
+      // Cyan or violet abdomen pulsing under a dark carapace.
+      final glow = b.variant == 0 ? 0xff5ef2e8 : 0xffc68cff;
+      final pulse = reducedMotion ? .8 : .6 + .4 * math.sin(b.phase * 1.3);
+      _oval(c, x, y, 5, 4, glow, a * (.10 + .20 * night) * pulse);
+      _oval(c, x, y - 1, 2, 2, 0xff1c2a33, a);
+      _rect(c, x - 1, y, 3, 1, glow, a * pulse);
+      _rect(c, x, y, 1, 1, 0xffffffff, a * pulse * .8);
+      _rect(c, x - 2, y - 2, 1, 1, 0xff1c2a33, a);
+      _rect(c, x + 1, y - 2, 1, 1, 0xff1c2a33, a);
+    } else if (b.species == 'moth') {
+      // Dusty pale wings with a dark spot; thicker body than a butterfly.
+      _oval(c, x - 2, y, wing + 1, 2, 0xffe8dcc4, a * .9);
+      _oval(c, x + 2, y, wing + 1, 2, 0xffe8dcc4, a * .9);
+      if (wing > 2) {
+        _rect(c, x - 3, y, 1, 1, 0xffa58d6c, a * .8);
+        _rect(c, x + 2, y, 1, 1, 0xffa58d6c, a * .8);
+      }
+      _rect(c, x, y - 1, 1, 3, 0xffb7a58a, a);
+      _rect(c, x, y - 2, 1, 1, 0xff5a4a3c, a);
+    } else if (b.species == 'mayfly') {
+      // Slender upright body, one translucent sail wing, two tail filaments.
+      final flick = reducedMotion ? .6 : .35 + .45 * math.sin(b.phase * 2).abs();
+      _rect(c, x, y - 4, 1, 3, 0xffeaf6f2, a * flick);
+      _rect(c, x, y - 1, 1, 4, 0xffd8e2c8, a);
+      _rect(c, x, y - 1, 1, 1, 0xff4d5b4b, a);
+      _line(c, x, y + 3, x - 2, y + 6, 0xffb9c7b7, a * .5);
+      _line(c, x, y + 3, x + 1, y + 6, 0xffb9c7b7, a * .5);
     } else if (b.species == 'ladybug') {
       _oval(c, x, y, 3, 3, 0xff293c46, a);
       _oval(c, x, y - 1, 2, 2, 0xffe78b69, a);
@@ -1022,8 +1107,12 @@ class PondRenderer {
         );
       }
     }
-    final rain = m.weather == 'drizzle' || m.weather == 'storm';
-    if (m.weather == 'mist' || m.weather == 'storm' || m.biome == 'autumn_mist') {
+    final rain = m.raining;
+    final intensity = m.rainIntensity;
+    // Heavy rain brings its own low fog, fading in above intensity 0.5.
+    final heavyFog = ((intensity - .5) / .5).clamp(0.0, 1.0);
+    final mistFog = m.weather == 'mist' || m.biome == 'autumn_mist';
+    if (mistFog || heavyFog > 0) {
       for (var i = 0; i < 9; i++) {
         final d = _details[70 + i];
         final x = -70 + d.x * 380 + math.sin(m.time * .035 + i) * 24 * motion;
@@ -1034,13 +1123,14 @@ class PondRenderer {
           240 + d.z * 180,
           3 + d.w * 6,
           0xffb7cdd0,
-          m.weather == 'mist' || m.biome == 'autumn_mist' ? .055 : .035,
+          mistFog ? .055 : .035 * heavyFog,
         );
       }
     }
     if (rain) {
       if (!reducedMotion && m.raindrops.isNotEmpty) {
         final windDx = m.wind * 2.4;
+        final streakAlpha = .22 + .16 * intensity;
         for (final drop in m.raindrops) {
           if (drop.y < -8) continue;
           final endY = math.min(drop.y, drop.targetY);
@@ -1053,9 +1143,27 @@ class PondRenderer {
             drop.x,
             endY,
             0xffc6e4e8,
-            .32,
+            streakAlpha,
           );
           _rect(c, drop.x, endY, 1, 1, 0xffe8fafc, .52);
+        }
+        // Downpour sheets above 0.7 are visual only: no impacts, no ripples.
+        final sheet = ((intensity - .7) / .3).clamp(0.0, 1.0);
+        final extra = (sheet * 30).round();
+        for (var i = 0; i < extra; i++) {
+          final d = _details[40 + i];
+          final y = (d.y * _height + m.time * (250 + d.z * 90)) % _height;
+          final x = (d.x * _width + m.wind * y * .1) % _width;
+          final length = 9 + d.w * 7;
+          _line(
+            c,
+            x - windDx,
+            y - length,
+            x,
+            y,
+            0xffc6e4e8,
+            .14 + .14 * sheet,
+          );
         }
       } else {
         for (var i = 0; i < 16; i++) {

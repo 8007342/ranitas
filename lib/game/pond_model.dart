@@ -1,6 +1,8 @@
 import 'dart:math';
 
+import 'insect_species.dart';
 import 'jump_policy.dart';
+import 'rain_envelope.dart';
 
 /// A deterministic, renderer-independent pond. Coordinates use a landscape
 /// viewport with (0, 0) at the upper left. Advance with seconds, not milliseconds.
@@ -30,6 +32,9 @@ class PondModel {
         : 'storm';
     cycle = random.nextDouble() < .75 ? 'dusk' : 'dawn';
     period = cycle == 'dawn' ? 'night' : 'day';
+    // Own seeded stream: sampling it never shifts the main draw order above.
+    _rainEnvelope = RainEnvelope(seed: sceneSeed, weather: weather);
+    rainIntensity = _rainEnvelope.at(0);
 
     // Biome-specific open-water basin so hero pads, ambient floating leaves,
     // Koi fish, and rain impacts always rest on water and never on shore rocks.
@@ -161,6 +166,25 @@ class PondModel {
 
   /// Persistent scene weather; gusts are expressed by wind and windTell.
   late String weather;
+
+  late final RainEnvelope _rainEnvelope;
+
+  /// Current rain intensity in `[0, 1]`: a seeded envelope inside drizzle and
+  /// storm sessions (design D1), always zero in clear and mist. Updated every
+  /// tick; it keeps evolving after sleep.
+  double rainIntensity = 0;
+
+  bool get raining => weather == 'drizzle' || weather == 'storm';
+
+  /// Cloud darkening for the scene grade, from the rain intensity.
+  double get cloudDarkening => RainEnvelope.cloudFor(rainIntensity);
+
+  /// Insect spawn-budget shelter: 1 when dry, lower as rain thickens.
+  double get insectShelter =>
+      raining ? RainEnvelope.shelterFor(rainIntensity) : 1.0;
+
+  /// Weather label for the ambience: a storm in a lull sounds like drizzle.
+  String get audioWeather => RainEnvelope.audioLabel(weather, rainIntensity);
 
   /// Seeded once: dusk (75%) or dawn (25%). Does not loop after sleep.
   late final String cycle;
@@ -312,6 +336,7 @@ class PondModel {
 
   void _tick(double dt) {
     time += dt;
+    rainIntensity = _rainEnvelope.at(time);
     if (started && !sleeping && !_settling) {
       elapsed += dt;
       engagement *= exp(-dt / 18);
@@ -765,38 +790,46 @@ class PondModel {
     }
   }
 
-  /// Artistic habitat rules: rain shelters delicate daytime species; luminous
-  /// insects occur only in dry twilight/darkness. Existing bugs fade on change.
+  /// Artistic habitat rules from the species table (`insect_species.dart`):
+  /// rain shelters delicate daytime species; each biome's night set fades in
+  /// on continuous daylight. Existing bugs fade when their species leaves.
   List<String> get availableSpecies {
-    final dry = weather == 'clear' || weather == 'mist';
-    final light = period == 'day' || (period == 'dawn' && progress >= .55);
+    final context = HabitatContext(
+      biome: biome,
+      daylight: daylight,
+      progress: progress,
+      period: period,
+      cycle: cycle,
+      weather: weather,
+      rainIntensity: rainIntensity,
+    );
     return [
-      if (weather != 'storm' && light) 'fly',
-      'mosquito',
-      if (dry && light && progress >= .12) 'dragonfly',
-      if (weather == 'clear' && light && progress >= .25) 'butterfly',
-      if (dry && light && progress >= .38) 'ladybug',
-      if (dry && !light && (cycle == 'dawn' || progress >= .55)) 'firefly',
+      for (final s in InsectSpecies.table)
+        if (s.habitat(context)) s.name,
     ];
   }
 
   void _spawnBug() {
     final species = availableSpecies;
     final kind = species[random.nextInt(species.length)];
+    final info = InsectSpecies.byName[kind]!;
     final angle = random.nextDouble() * pi * 2;
-    final speed = kind == 'dragonfly'
-        ? .12
-        : kind == 'butterfly'
-        ? .045
-        : .07;
+    final speed = info.speed;
+    final x = .08 + random.nextDouble() * .84;
+    final yRoll = random.nextDouble();
+    final phase = random.nextDouble() * pi * 2;
+    final (bandLow, bandHigh) = info.altitude;
     bugs.add(
       BugState(
-          x: .08 + random.nextDouble() * .84,
-          y: .2 + random.nextDouble() * .4,
+          x: x,
+          y: info.night
+              ? bandLow + yRoll * (bandHigh - bandLow)
+              : .2 + yRoll * .4,
           vx: cos(angle) * speed,
           vy: sin(angle) * speed * .4,
-          phase: random.nextDouble() * pi * 2,
+          phase: phase,
           species: kind,
+          variant: (phase * 1000).floor() & 1,
         )
         .._heading = angle
         ..opacity = 0,
@@ -807,28 +840,39 @@ class PondModel {
     if (!started) return;
     bugs.removeWhere((b) => !b.alive);
     final species = availableSpecies;
+    final light = InsectSpecies.lightSourceFor(biome);
     for (final bug in bugs) {
-      bug.phase =
-          (bug.phase + dt * (bug.species == 'mosquito' ? 13 : 5)) % (pi * 2);
+      final info = InsectSpecies.byName[bug.species] ?? InsectSpecies.table[0];
+      bug.phase = (bug.phase + dt * info.wingRate) % (pi * 2);
       bug._turn =
           bug._turn * exp(-dt * 2) +
-          (random.nextDouble() - .5) * sqrt(dt) * 1.8;
+          (random.nextDouble() - .5) * sqrt(dt) * info.turn;
       bug._heading += bug._turn * dt;
-      final speed = bug.species == 'dragonfly'
-          ? .12
-          : bug.species == 'butterfly'
-          ? .045
-          : .07;
+      final speed = info.speed;
+      final (bandLow, bandHigh) = info.altitude;
       var targetX = cos(bug._heading) * speed + wind * .025;
-      var targetY = sin(bug._heading) * speed * .55 + sin(bug.phase) * .008;
+      var targetY =
+          sin(bug._heading) * speed * .55 + sin(bug.phase) * info.bob;
       targetX += max(0, .14 - bug.x) * .8 - max(0, bug.x - .86) * .8;
-      targetY += max(0, .22 - bug.y) * .8 - max(0, bug.y - .58) * .8;
+      targetY +=
+          max(0, bandLow - bug.y) * .8 - max(0, bug.y - bandHigh) * .8;
+      if (info.lightSeeking && light != null) {
+        // Moths circle the lantern: pull toward it plus a tangential drift.
+        final dx = light.$1 - bug.x;
+        final dy = light.$2 - bug.y;
+        final dist = sqrt(dx * dx + dy * dy);
+        if (dist > .025) {
+          final pull = .035 * (dist / .12).clamp(0.0, 1.0);
+          targetX += (dx * pull - dy * pull * .8) / dist;
+          targetY += (dy * pull * .55 + dx * pull * .5) / dist;
+        }
+      }
       bug.vx += (targetX - bug.vx) * (1 - exp(-dt * 3));
       bug.vy += (targetY - bug.vy) * (1 - exp(-dt * 3));
       bug.x = (bug.x + bug.vx * dt).clamp(.04, .96);
-      bug.y = (bug.y + bug.vy * dt).clamp(.12, .65);
+      bug.y = (bug.y + bug.vy * dt).clamp(.12, info.maxY);
       if (bug.x <= .04 || bug.x >= .96) bug.vx = -bug.vx;
-      if (bug.y <= .12 || bug.y >= .65) bug.vy = -bug.vy;
+      if (bug.y <= .12 || bug.y >= info.maxY) bug.vy = -bug.vy;
       bug.opacity =
           (bug.opacity + (species.contains(bug.species) ? dt : -dt * .3)).clamp(
             0.0,
@@ -839,11 +883,7 @@ class PondModel {
     _spawnClock += dt;
     if (_spawnClock >= .8) {
       _spawnClock -= .8;
-      final shelter = weather == 'storm'
-          ? .25
-          : weather == 'drizzle'
-          ? .55
-          : 1.0;
+      final shelter = insectShelter;
       final emergence = (elapsed / 12).clamp(0.0, 1.0);
       final target = ((3 + richness * 15) * shelter * emergence).ceil();
       if (bugs.length < target) _spawnBug();
@@ -1015,13 +1055,16 @@ class PondModel {
   }
 
   void _updateRain(double dt) {
-    final isRaining = weather == 'drizzle' || weather == 'storm';
-    if (!isRaining) {
+    if (!raining) {
       raindrops.clear();
       return;
     }
-    final targetCount = weather == 'storm' ? 42 : 20;
-    final spawnRate = weather == 'storm' ? 110.0 : 48.0;
+    // Everything scales on the envelope: ~17 drops at 0.3, 42 at a downpour.
+    // Streaks beyond intensity 0.7 are drawn by the renderer only, so the
+    // physical drop count and the 34-ripple cap stay bounded.
+    final intensity = rainIntensity;
+    final targetCount = (6 + 36 * intensity).round();
+    final spawnRate = 20.0 + 90.0 * intensity;
     final toSpawn = (spawnRate * dt + (_fxRandom.nextDouble() < .4 ? 1 : 0))
         .floor();
 
@@ -1045,7 +1088,7 @@ class PondModel {
           vy: vy,
           targetX: tx,
           targetY: ty,
-          length: 5.0 + _fxRandom.nextDouble() * 4.5,
+          length: (5.0 + _fxRandom.nextDouble() * 4.5) * (.8 + .5 * intensity),
         ),
       );
     }
@@ -1094,7 +1137,7 @@ class PondModel {
             initialRadius: 1.2,
             maxRadius: 13.0 + _fxRandom.nextDouble() * 9.0,
             duration: .68,
-            intensity: weather == 'storm' ? .44 : .34,
+            intensity: .30 + .14 * intensity,
           );
           if (_fxRandom.nextDouble() < .55) {
             _emitSplashDroplets(
@@ -1544,9 +1587,13 @@ class BugState {
     required this.vy,
     required this.phase,
     required this.species,
+    this.variant = 0,
   });
   double x, y, vx, vy, phase;
   String species;
+
+  /// Small per-insect look variation (glow beetles: 0 cyan, 1 violet).
+  final int variant;
   bool alive = true;
   double opacity = 1;
   double _heading = 0, _turn = 0;

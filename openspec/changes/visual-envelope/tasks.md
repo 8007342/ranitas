@@ -7,11 +7,11 @@
 
 ## 2. Atmosphere (branch `work/pond-atmosphere`)
 
-- [ ] 2.1 Seeded rain intensity envelope in drizzle/storm; drive spawn, caps, streaks, ripples, shelter, audio label
-- [ ] 2.2 Insect species table with biome night sets (firefly, moth, mayfly, glowbeetle) keyed on continuous daylight; procedural sprites
-- [ ] 2.3 Colour-matrix time-of-day grade with per-biome night keys, replacing the flat wash; apply to foreground
-- [ ] 2.4 `scripts/make-emissive.mjs` and generated emissive masks; emissive draw pass with fallback
-- [ ] 2.5 Tests: envelope bounds and smoothness, determinism, night-set availability, grade monotonicity
+- [x] 2.1 Seeded rain intensity envelope in drizzle/storm; drive spawn, caps, streaks, ripples, shelter, audio label
+- [x] 2.2 Insect species table with biome night sets (firefly, moth, mayfly, glowbeetle) keyed on continuous daylight; procedural sprites
+- [x] 2.3 Colour-matrix time-of-day grade with per-biome night keys, replacing the flat wash; apply to foreground
+- [x] 2.4 `scripts/make-emissive.mjs` and generated emissive masks; emissive draw pass with fallback
+- [x] 2.5 Tests: envelope bounds and smoothness, determinism, night-set availability, grade monotonicity
 
 ## 3. Layers and palette cycling (branch `work/pond-layers`)
 

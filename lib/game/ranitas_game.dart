@@ -5,8 +5,10 @@ import 'package:flame/game.dart';
 
 import '../audio/ambience.dart';
 import '../platform/scene_ready.dart';
+import 'optional_assets.dart';
 import 'pond_model.dart';
 import 'pond_renderer.dart';
+import 'scene_grade.dart';
 
 class RanitasGame extends FlameGame {
   RanitasGame({int? seed, double? durationOverride})
@@ -21,6 +23,10 @@ class RanitasGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     renderer.backdrop = await images.load(model.backdropAsset);
+    renderer.emissive = await OptionalAssets.load(
+      images,
+      OptionalAssets.emissive(model.backdropAsset),
+    );
     renderer.frogSheets = [
       await images.load('frog-meadow-sheet.webp'),
       await images.load('frog-teal-sheet.webp'),
@@ -41,7 +47,7 @@ class RanitasGame extends FlameGame {
         ambience.update(
           model.progress,
           model.richness,
-          model.weather,
+          model.audioWeather,
           model.sleeping,
         );
       }
@@ -61,7 +67,6 @@ class RanitasGame extends FlameGame {
     renderer.render(canvas, Size(size.x, size.y), model);
     final layer = foreground;
     if (layer == null) return;
-    final night = 1 - model.daylight;
     final opacity = (model.richness - .12).clamp(0.0, 1.0) * .68;
     final sway = renderer.reducedMotion
         ? 0.0
@@ -80,14 +85,9 @@ class RanitasGame extends FlameGame {
       Paint()
         ..filterQuality = FilterQuality.none
         ..color = Color.fromRGBO(255, 255, 255, opacity)
-        ..colorFilter = ColorFilter.mode(
-          Color.lerp(
-            const Color(0xffffffff),
-            const Color(0xff41617c),
-            night * .8,
-          )!,
-          BlendMode.modulate,
-        ),
+        // Same continuous grade as the backdrop, so the near corner darkens
+        // with the scene instead of a separate modulate tint.
+        ..colorFilter = SceneGrade.filterFor(model),
     );
     canvas.restore();
   }
